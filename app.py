@@ -380,6 +380,69 @@ def render_top_occupations_tab(df):
     else:
         st.warning("No data available for analysis.")
 
+@st.cache_data(ttl=900, show_spinner=False)
+def process_yearly_analysis_data(yearly_df):
+    """Process yearly analysis data - cached function for expensive computations"""
+    if yearly_df.empty or len(yearly_df) == 0:
+        return None, None, None, None, None
+    
+    # Process wage level trends data
+    yearly_wage_data = yearly_df.groupby(['YEAR', 'PW_WAGE_LEVEL']).size().reset_index(name='count')
+    yearly_wage_pivot = yearly_wage_data.pivot(index='YEAR', columns='PW_WAGE_LEVEL', values='count').fillna(0)
+    yearly_wage_pct = yearly_wage_pivot.div(yearly_wage_pivot.sum(axis=1), axis=0) * 100
+    
+    # Process salary trends data
+    salary_trends = yearly_df.groupby(['YEAR', 'PW_WAGE_LEVEL'])['PREVAILING_WAGE'].agg(['mean', 'median', 'count']).reset_index()
+    salary_trends.columns = ['Year', 'Wage Level', 'Average Salary', 'Median Salary', 'Count']
+    
+    # Process yearly statistics
+    yearly_stats = yearly_df.groupby('YEAR').agg({
+        'PW_WAGE_LEVEL': 'count',
+        'PREVAILING_WAGE': ['mean', 'median', 'min', 'max']
+    }).round(0)
+    yearly_stats.columns = ['Total Petitions', 'Avg Salary', 'Median Salary', 'Min Salary', 'Max Salary']
+    
+    # Process policy impact data
+    yearly_impact = []
+    for year in sorted(yearly_df['YEAR'].unique()):
+        year_data = yearly_df[yearly_df['YEAR'] == year]
+        total = len(year_data)
+        level1 = len(year_data[year_data['PW_WAGE_LEVEL'] == 'I'])
+        level2 = len(year_data[year_data['PW_WAGE_LEVEL'] == 'II'])
+        level3 = len(year_data[year_data['PW_WAGE_LEVEL'] == 'III'])
+        level4 = len(year_data[year_data['PW_WAGE_LEVEL'] == 'IV'])
+        
+        yearly_impact.append({
+            'Year': year,
+            'Total Petitions': total,
+            'Level I Count': level1,
+            'Level I %': round(level1/total*100, 1),
+            'Level II Count': level2,
+            'Level II %': round(level2/total*100, 1),
+            'Level III Count': level3,
+            'Level III %': round(level3/total*100, 1),
+            'Level IV Count': level4,
+            'Level IV %': round(level4/total*100, 1),
+            'At Risk (I+II)': level1 + level2,
+            'At Risk %': round((level1 + level2)/total*100, 1)
+        })
+    
+    # Process top occupations data
+    yearly_occupations = {}
+    for year in sorted(yearly_df['YEAR'].unique()):
+        year_data = yearly_df[yearly_df['YEAR'] == year]
+        for level in sorted(year_data['PW_WAGE_LEVEL'].unique()):
+            level_data = year_data[year_data['PW_WAGE_LEVEL'] == level]
+            if len(level_data) >= 10:  # Only if we have enough data
+                top_occ = level_data['aggressive_normalized_soc_title'].value_counts().head(5)
+                yearly_occupations[f'{year}_Level_{level}'] = {
+                    'Year': year,
+                    'Wage Level': level,
+                    'Top Occupations': top_occ.to_dict()
+                }
+    
+    return yearly_wage_pct, salary_trends, yearly_stats, yearly_impact, yearly_occupations
+
 def render_yearly_analysis_tab(yearly_df, dark_mode, config, show_debug=False):
     """Render yearly analysis tab content"""
     st.subheader("📈 Yearly Trends & Policy Impact Analysis")
@@ -396,169 +459,121 @@ def render_yearly_analysis_tab(yearly_df, dark_mode, config, show_debug=False):
             st.info(f"Years in data: {years_in_data}")
     
     if not yearly_df.empty and len(yearly_df) > 0:
-        # Use tabs to organize the yearly analysis and prevent overlapping
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
-            "📊 Wage Level Trends", 
-            "📈 Salary Trends", 
-            "📋 Yearly Statistics", 
-            "⚠️ Policy Impact", 
-            "💼 Top Occupations"
-        ])
+        # Process data using cached function
+        yearly_wage_pct, salary_trends, yearly_stats, yearly_impact, yearly_occupations = process_yearly_analysis_data(yearly_df)
         
-        with tab1:
-            st.markdown("**Wage Level Distribution Trends (2020-2024)**")
-            yearly_wage_data = yearly_df.groupby(['YEAR', 'PW_WAGE_LEVEL']).size().reset_index(name='count')
-            yearly_wage_pivot = yearly_wage_data.pivot(index='YEAR', columns='PW_WAGE_LEVEL', values='count').fillna(0)
+        if yearly_wage_pct is not None:
+            # Use tabs to organize the yearly analysis and prevent overlapping
+            tab1, tab2, tab3, tab4, tab5 = st.tabs([
+                "📊 Wage Level Trends", 
+                "📈 Salary Trends", 
+                "📋 Yearly Statistics", 
+                "⚠️ Policy Impact", 
+                "💼 Top Occupations"
+            ])
             
-            # Calculate percentages for each year
-            yearly_wage_pct = yearly_wage_pivot.div(yearly_wage_pivot.sum(axis=1), axis=0) * 100
-            
-            fig_yearly_trend = go.Figure()
-            # Professional color mapping for wage levels
-            level_colors = {
-                'I': COLORS['warning'],      # Red for Level I (entry level)
-                'II': COLORS['secondary'],   # Orange for Level II
-                'III': COLORS['primary'],    # Blue for Level III
-                'IV': COLORS['success']      # Green for Level IV (senior)
-            }
-            
-            for level in yearly_wage_pct.columns:
-                fig_yearly_trend.add_trace(go.Scatter(
-                    x=yearly_wage_pct.index,
-                    y=yearly_wage_pct[level],
-                    mode='lines+markers',
-                    name=f'Level {level}',
-                    line=dict(width=3, color=level_colors.get(level, COLORS['info'])),
-                    marker=dict(size=8, color=level_colors.get(level, COLORS['info']))
-                ))
-            
-            if dark_mode:
-                fig_yearly_trend.update_layout(
-                    paper_bgcolor=COLORS['dark'],
-                    plot_bgcolor=COLORS['dark'],
-                    font={"color": "white"},
-                    xaxis=dict(gridcolor="#6c757d", linecolor="#6c757d", tickfont={"color": "white"}),
-                    yaxis=dict(gridcolor="#6c757d", linecolor="#6c757d", tickfont={"color": "white"})
-                )
-            
-            fig_yearly_trend.update_layout(
-                title="H-1B Lottery Petitions by Wage Level Over Time",
-                xaxis_title="Year",
-                yaxis_title="Percentage of Petitions (%)",
-                legend_title="Wage Level",
-                hovermode='x unified',
-                height=400
-            )
-            st.plotly_chart(fig_yearly_trend, use_container_width=True, config=config)
-        
-        with tab2:
-            st.markdown("**Salary Trends by Wage Level (2020-2024)**")
-            salary_trends = yearly_df.groupby(['YEAR', 'PW_WAGE_LEVEL'])['PREVAILING_WAGE'].agg(['mean', 'median', 'count']).reset_index()
-            salary_trends.columns = ['Year', 'Wage Level', 'Average Salary', 'Median Salary', 'Count']
-            
-            # Create salary trend chart
-            fig_salary_trend = go.Figure()
-            # Professional color mapping for wage levels
-            level_colors = {
-                'I': COLORS['warning'],      # Red for Level I (entry level)
-                'II': COLORS['secondary'],   # Orange for Level II
-                'III': COLORS['primary'],    # Blue for Level III
-                'IV': COLORS['success']      # Green for Level IV (senior)
-            }
-            
-            for level in sorted(yearly_df['PW_WAGE_LEVEL'].unique()):
-                level_data = salary_trends[salary_trends['Wage Level'] == level]
-                fig_salary_trend.add_trace(go.Scatter(
-                    x=level_data['Year'],
-                    y=level_data['Average Salary'],
-                    mode='lines+markers',
-                    name=f'Level {level} (Avg)',
-                    line=dict(width=3, color=level_colors.get(level, COLORS['info'])),
-                    marker=dict(size=8, color=level_colors.get(level, COLORS['info']))
-                ))
-            
-            if dark_mode:
-                fig_salary_trend.update_layout(
-                    paper_bgcolor=COLORS['dark'],
-                    plot_bgcolor=COLORS['dark'],
-                    font={"color": "white"},
-                    xaxis=dict(gridcolor="#6c757d", linecolor="#6c757d", tickfont={"color": "white"}),
-                    yaxis=dict(gridcolor="#6c757d", linecolor="#6c757d", tickfont={"color": "white"})
-                )
-            
-            fig_salary_trend.update_layout(
-                title="Average Salary Trends by Wage Level Over Time",
-                xaxis_title="Year",
-                yaxis_title="Average Salary ($)",
-                yaxis=dict(tickformat=",.0f"),
-                legend_title="Wage Level",
-                height=400
-            )
-            st.plotly_chart(fig_salary_trend, use_container_width=True, config=config)
-        
-        with tab3:
-            st.markdown("**Yearly Summary Statistics**")
-            yearly_stats = yearly_df.groupby('YEAR').agg({
-                'PW_WAGE_LEVEL': 'count',
-                'PREVAILING_WAGE': ['mean', 'median', 'min', 'max']
-            }).round(0)
-            yearly_stats.columns = ['Total Petitions', 'Avg Salary', 'Median Salary', 'Min Salary', 'Max Salary']
-            st.dataframe(yearly_stats, use_container_width=True)
-        
-        with tab4:
-            st.markdown("**Wage Level Impact Analysis by Year**")
-            
-            # Calculate what would happen under wage-based selection each year
-            yearly_impact = []
-            for year in sorted(yearly_df['YEAR'].unique()):
-                year_data = yearly_df[yearly_df['YEAR'] == year]
-                total = len(year_data)
-                level1 = len(year_data[year_data['PW_WAGE_LEVEL'] == 'I'])
-                level2 = len(year_data[year_data['PW_WAGE_LEVEL'] == 'II'])
-                level3 = len(year_data[year_data['PW_WAGE_LEVEL'] == 'III'])
-                level4 = len(year_data[year_data['PW_WAGE_LEVEL'] == 'IV'])
+            with tab1:
+                st.markdown("**Wage Level Distribution Trends (2020-2024)**")
                 
-                yearly_impact.append({
-                    'Year': year,
-                    'Total Petitions': total,
-                    'Level I Count': level1,
-                    'Level I %': round(level1/total*100, 1),
-                    'Level II Count': level2,
-                    'Level II %': round(level2/total*100, 1),
-                    'Level III Count': level3,
-                    'Level III %': round(level3/total*100, 1),
-                    'Level IV Count': level4,
-                    'Level IV %': round(level4/total*100, 1),
-                    'At Risk (I+II)': level1 + level2,
-                    'At Risk %': round((level1 + level2)/total*100, 1)
-                })
-            
-            impact_df = pd.DataFrame(yearly_impact)
-            st.dataframe(impact_df, use_container_width=True)
+                fig_yearly_trend = go.Figure()
+                # Professional color mapping for wage levels
+                level_colors = {
+                    'I': COLORS['warning'],      # Red for Level I (entry level)
+                    'II': COLORS['secondary'],   # Orange for Level II
+                    'III': COLORS['primary'],    # Blue for Level III
+                    'IV': COLORS['success']      # Green for Level IV (senior)
+                }
+                
+                for level in yearly_wage_pct.columns:
+                    fig_yearly_trend.add_trace(go.Scatter(
+                        x=yearly_wage_pct.index,
+                        y=yearly_wage_pct[level],
+                        mode='lines+markers',
+                        name=f'Level {level}',
+                        line=dict(width=3, color=level_colors.get(level, COLORS['info'])),
+                        marker=dict(size=8, color=level_colors.get(level, COLORS['info']))
+                    ))
+                
+                if dark_mode:
+                    fig_yearly_trend.update_layout(
+                        paper_bgcolor=COLORS['dark'],
+                        plot_bgcolor=COLORS['dark'],
+                        font={"color": "white"},
+                        xaxis=dict(gridcolor="#6c757d", linecolor="#6c757d", tickfont={"color": "white"}),
+                        yaxis=dict(gridcolor="#6c757d", linecolor="#6c757d", tickfont={"color": "white"})
+                    )
+                
+                fig_yearly_trend.update_layout(
+                    title="H-1B Lottery Petitions by Wage Level Over Time",
+                    xaxis_title="Year",
+                    yaxis_title="Percentage of Petitions (%)",
+                    legend_title="Wage Level",
+                    hovermode='x unified',
+                    height=400
+                )
+                st.plotly_chart(fig_yearly_trend, use_container_width=True, config=config)
         
-        with tab5:
-            st.markdown("**Top Occupations by Year and Wage Level**")
+            with tab2:
+                st.markdown("**Salary Trends by Wage Level (2020-2024)**")
+                
+                # Create salary trend chart
+                fig_salary_trend = go.Figure()
+                # Professional color mapping for wage levels
+                level_colors = {
+                    'I': COLORS['warning'],      # Red for Level I (entry level)
+                    'II': COLORS['secondary'],   # Orange for Level II
+                    'III': COLORS['primary'],    # Blue for Level III
+                    'IV': COLORS['success']      # Green for Level IV (senior)
+                }
+                
+                for level in sorted(yearly_df['PW_WAGE_LEVEL'].unique()):
+                    level_data = salary_trends[salary_trends['Wage Level'] == level]
+                    fig_salary_trend.add_trace(go.Scatter(
+                        x=level_data['Year'],
+                        y=level_data['Average Salary'],
+                        mode='lines+markers',
+                        name=f'Level {level} (Avg)',
+                        line=dict(width=3, color=level_colors.get(level, COLORS['info'])),
+                        marker=dict(size=8, color=level_colors.get(level, COLORS['info']))
+                    ))
+                
+                if dark_mode:
+                    fig_salary_trend.update_layout(
+                        paper_bgcolor=COLORS['dark'],
+                        plot_bgcolor=COLORS['dark'],
+                        font={"color": "white"},
+                        xaxis=dict(gridcolor="#6c757d", linecolor="#6c757d", tickfont={"color": "white"}),
+                        yaxis=dict(gridcolor="#6c757d", linecolor="#6c757d", tickfont={"color": "white"})
+                    )
+                
+                fig_salary_trend.update_layout(
+                    title="Average Salary Trends by Wage Level Over Time",
+                    xaxis_title="Year",
+                    yaxis_title="Average Salary ($)",
+                    yaxis=dict(tickformat=",.0f"),
+                    legend_title="Wage Level",
+                    height=400
+                )
+                st.plotly_chart(fig_salary_trend, use_container_width=True, config=config)
             
-            # Get top 5 occupations for each year and wage level combination
-            yearly_occupations = {}
-            for year in sorted(yearly_df['YEAR'].unique()):
-                year_data = yearly_df[yearly_df['YEAR'] == year]
-                for level in sorted(year_data['PW_WAGE_LEVEL'].unique()):
-                    level_data = year_data[year_data['PW_WAGE_LEVEL'] == level]
-                    if len(level_data) >= 10:  # Only if we have enough data
-                        top_occ = level_data['aggressive_normalized_soc_title'].value_counts().head(5)
-                        yearly_occupations[f'{year}_Level_{level}'] = {
-                            'Year': year,
-                            'Wage Level': level,
-                            'Top Occupations': top_occ.to_dict()
-                        }
+            with tab3:
+                st.markdown("**Yearly Summary Statistics**")
+                st.dataframe(yearly_stats, use_container_width=True)
             
-            # Display in a more readable format
-            for key, data in yearly_occupations.items():
-                st.markdown(f"**{data['Year']} - Level {data['Wage Level']}:**")
-                for occ, count in data['Top Occupations'].items():
-                    st.markdown(f"- {occ}: {count:,} petitions")
-                st.markdown("---")
+            with tab4:
+                st.markdown("**Wage Level Impact Analysis by Year**")
+                impact_df = pd.DataFrame(yearly_impact)
+                st.dataframe(impact_df, use_container_width=True)
+        
+            with tab5:
+                st.markdown("**Top Occupations by Year and Wage Level**")
+                
+                # Display in a more readable format
+                for key, data in yearly_occupations.items():
+                    st.markdown(f"**{data['Year']} - Level {data['Wage Level']}:**")
+                    for occ, count in data['Top Occupations'].items():
+                        st.markdown(f"- {occ}: {count:,} petitions")
+                    st.markdown("---")
     else:
         st.warning("No data available for yearly analysis.")
 
