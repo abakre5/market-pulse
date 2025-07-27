@@ -894,11 +894,7 @@ st.title("US H-1B Lottery Petition Explorer")
 # Sidebar filters
 st.sidebar.header("Filters")
 
-# Add cache clearing button for debugging
-if st.sidebar.button("🔄 Clear Cache & Refresh", help="Clear all cached data and refresh filters"):
-    st.cache_data.clear()
-    st.cache_resource.clear()
-    st.rerun()
+
 
 
 
