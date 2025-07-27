@@ -307,7 +307,7 @@ def get_yearly_data(company, state, city, soc_title):
             return pd.DataFrame()
 
 # Background rendering functions for each tab
-def render_wage_distribution_tab(df, fig, config, dark_mode):
+def render_wage_distribution_tab(df, fig, config):
     """Render wage distribution tab content"""
     # Ensure config is not None
     if config is None:
@@ -443,7 +443,7 @@ def process_yearly_analysis_data(yearly_df):
     
     return yearly_wage_pct, salary_trends, yearly_stats, yearly_impact, yearly_occupations
 
-def render_yearly_analysis_tab(yearly_df, dark_mode, config, show_debug=False):
+def render_yearly_analysis_tab(yearly_df, config, show_debug=False):
     """Render yearly analysis tab content"""
     st.subheader("📈 Yearly Trends & Policy Impact Analysis")
     
@@ -494,14 +494,7 @@ def render_yearly_analysis_tab(yearly_df, dark_mode, config, show_debug=False):
                         marker=dict(size=8, color=level_colors.get(level, COLORS['info']))
                     ))
                 
-                if dark_mode:
-                    fig_yearly_trend.update_layout(
-                        paper_bgcolor=COLORS['dark'],
-                        plot_bgcolor=COLORS['dark'],
-                        font={"color": "white"},
-                        xaxis=dict(gridcolor="#6c757d", linecolor="#6c757d", tickfont={"color": "white"}),
-                        yaxis=dict(gridcolor="#6c757d", linecolor="#6c757d", tickfont={"color": "white"})
-                    )
+
                 
                 fig_yearly_trend.update_layout(
                     title="H-1B Lottery Petitions by Wage Level Over Time",
@@ -537,14 +530,7 @@ def render_yearly_analysis_tab(yearly_df, dark_mode, config, show_debug=False):
                         marker=dict(size=8, color=level_colors.get(level, COLORS['info']))
                     ))
                 
-                if dark_mode:
-                    fig_salary_trend.update_layout(
-                        paper_bgcolor=COLORS['dark'],
-                        plot_bgcolor=COLORS['dark'],
-                        font={"color": "white"},
-                        xaxis=dict(gridcolor="#6c757d", linecolor="#6c757d", tickfont={"color": "white"}),
-                        yaxis=dict(gridcolor="#6c757d", linecolor="#6c757d", tickfont={"color": "white"})
-                    )
+
                 
                 fig_salary_trend.update_layout(
                     title="Average Salary Trends by Wage Level Over Time",
@@ -577,7 +563,7 @@ def render_yearly_analysis_tab(yearly_df, dark_mode, config, show_debug=False):
     else:
         st.warning("No data available for yearly analysis.")
 
-def render_us_map_tab(company, year, soc_title, job_title, dark_mode):
+def render_us_map_tab(company, year, soc_title, job_title):
     """Render US map visualization tab - respects Company, Year, SOC Title, and Job Title filters only"""
     st.subheader("🗺️ US Geographic Distribution")
     st.info("💡 **Note:** This map shows data across ALL states, respecting Company, Year, SOC Title, and Job Title filters (State and City filters are ignored for geographic visualization).")
@@ -634,32 +620,17 @@ def render_us_map_tab(company, year, soc_title, job_title, dark_mode):
             labels={'petition_count': 'Petitions', 'percentage': '% of Total', 'avg_salary': 'Avg Salary'}
         )
         
-        # Apply dark mode styling
-        if dark_mode:
-            fig_map.update_layout(
-                paper_bgcolor=COLORS['dark'],
-                plot_bgcolor=COLORS['dark'],
-                font={"color": "white"},
-                geo=dict(
-                    bgcolor=COLORS['dark'],
-                    landcolor='#495057',
-                    coastlinecolor='#6c757d',
-                    showland=True,
-                    showcoastlines=True,
-                    projection_type='albers usa'
-                )
+        # Apply styling
+        fig_map.update_layout(
+            geo=dict(
+                bgcolor='white',
+                landcolor='#f8f9fa',
+                coastlinecolor=COLORS['border'],
+                showland=True,
+                showcoastlines=True,
+                projection_type='albers usa'
             )
-        else:
-            fig_map.update_layout(
-                geo=dict(
-                    bgcolor='white',
-                    landcolor='#f8f9fa',
-                    coastlinecolor=COLORS['border'],
-                    showland=True,
-                    showcoastlines=True,
-                    projection_type='albers usa'
-                )
-            )
+        )
         
         fig_map.update_layout(height=500)
         st.plotly_chart(fig_map, use_container_width=True)
@@ -691,32 +662,17 @@ def render_us_map_tab(company, year, soc_title, job_title, dark_mode):
             labels={'avg_salary': 'Avg Salary ($)', 'petition_count': 'Petitions', 'percentage': '% of Total'}
         )
         
-        # Apply dark mode styling
-        if dark_mode:
-            fig_salary_map.update_layout(
-                paper_bgcolor=COLORS['dark'],
-                plot_bgcolor=COLORS['dark'],
-                font={"color": "white"},
-                geo=dict(
-                    bgcolor=COLORS['dark'],
-                    landcolor='#495057',
-                    coastlinecolor='#6c757d',
-                    showland=True,
-                    showcoastlines=True,
-                    projection_type='albers usa'
-                )
+        # Apply styling
+        fig_salary_map.update_layout(
+            geo=dict(
+                bgcolor='white',
+                landcolor='#f8f9fa',
+                coastlinecolor=COLORS['border'],
+                showland=True,
+                showcoastlines=True,
+                projection_type='albers usa'
             )
-        else:
-            fig_salary_map.update_layout(
-                geo=dict(
-                    bgcolor='white',
-                    landcolor='#f8f9fa',
-                    coastlinecolor=COLORS['border'],
-                    showland=True,
-                    showcoastlines=True,
-                    projection_type='albers usa'
-                )
-            )
+        )
         
         fig_salary_map.update_layout(height=500)
         st.plotly_chart(fig_salary_map, use_container_width=True)
@@ -762,15 +718,7 @@ def render_us_map_tab(company, year, soc_title, job_title, dark_mode):
                 labels={'count': 'Number of Petitions', 'state': 'State', 'wage_level': 'Wage Level'}
             )
             
-            # Apply dark mode styling
-            if dark_mode:
-                fig_wage_dist.update_layout(
-                    paper_bgcolor=COLORS['dark'],
-                    plot_bgcolor=COLORS['dark'],
-                    font={"color": "white"},
-                    xaxis=dict(gridcolor="#6c757d", linecolor="#6c757d", tickfont={"color": "white"}),
-                    yaxis=dict(gridcolor="#6c757d", linecolor="#6c757d", tickfont={"color": "white"})
-                )
+
             
             fig_wage_dist.update_layout(height=500, xaxis_tickangle=-45)
             st.plotly_chart(fig_wage_dist, use_container_width=True)
@@ -839,10 +787,7 @@ def render_policy_summary_tab(df):
 
 st.set_page_config(page_title="H-1B Lottery Explorer", layout="wide")
 
-# Dark mode toggle
-col1, col2, col3 = st.columns([1, 3, 1])
-with col1:
-    dark_mode = st.toggle("🌙 Dark Mode", value=False)
+
 
 # Professional color scheme for journalists and data analysts
 COLORS = {
@@ -860,163 +805,89 @@ COLORS = {
 }
 
 # Apply professional styling
-if dark_mode:
-    # Dark mode styling
-    st.markdown(f"""
-    <style>
-        /* Dark mode main styling */
-        .main {{
-            background: linear-gradient(135deg, {COLORS['dark']} 0%, #212529 100%);
-            color: white;
-        }}
-        
-        .stApp {{
-            background: linear-gradient(135deg, {COLORS['dark']} 0%, #212529 100%);
-        }}
-        
-        /* Dark mode headers */
+st.markdown(f"""
+<style>
+    /* Main styling */
+    .main {{
+        background: linear-gradient(135deg, {COLORS['light']} 0%, #ffffff 100%);
+        color: {COLORS['text_primary']};
+    }}
+    
+    /* Headers */
+    .main .block-container h1 {{
+        color: {COLORS['primary']};
+        font-weight: 700;
+        border-bottom: 3px solid {COLORS['secondary']};
+        padding-bottom: 10px;
+        margin-bottom: 30px;
+    }}
+    
+    .main .block-container h2 {{
+        color: {COLORS['primary']};
+        font-weight: 600;
+        border-left: 4px solid {COLORS['secondary']};
+        padding-left: 15px;
+        margin-top: 30px;
+    }}
+    
+    .main .block-container h3 {{
+        color: {COLORS['text_primary']};
+        font-weight: 600;
+        margin-top: 25px;
+    }}
+    
+    /* Sidebar */
+    .css-1d391kg {{
+        background: linear-gradient(180deg, {COLORS['dark']} 0%, #495057 100%);
+        color: white;
+    }}
+    
+    /* Components */
+    .stDataFrame, .stMetric {{
+        border: 1px solid {COLORS['border']};
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }}
+    
+    /* Interactive elements */
+    .stSelectbox > div > div {{
+        border: 2px solid {COLORS['border']};
+        border-radius: 6px;
+        transition: border-color 0.3s ease;
+    }}
+    
+    .stSelectbox > div > div:hover {{
+        border-color: {COLORS['primary']};
+    }}
+    
+    /* Buttons */
+    .stButton > button {{
+        background: linear-gradient(45deg, {COLORS['primary']}, {COLORS['info']});
+        color: white;
+        border: none;
+        border-radius: 6px;
+        padding: 8px 16px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }}
+    
+    .stButton > button:hover {{
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }}
+    
+    /* Responsive design */
+    @media (max-width: 768px) {{
         .main .block-container h1 {{
-            color: {COLORS['secondary']};
-            font-weight: 700;
-            border-bottom: 3px solid {COLORS['primary']};
-            padding-bottom: 10px;
-            margin-bottom: 30px;
+            font-size: 1.8rem;
         }}
         
         .main .block-container h2 {{
-            color: {COLORS['secondary']};
-            font-weight: 600;
-            border-left: 4px solid {COLORS['primary']};
-            padding-left: 15px;
-            margin-top: 30px;
+            font-size: 1.4rem;
         }}
-        
-        .main .block-container h3 {{
-            color: white;
-            font-weight: 600;
-            margin-top: 25px;
-        }}
-        
-        /* Dark mode sidebar */
-        .css-1d391kg {{
-            background: linear-gradient(180deg, #495057 0%, {COLORS['dark']} 100%);
-            color: white;
-        }}
-        
-        /* Dark mode components */
-        .stDataFrame, .stMetric, .stAlert, .stInfo, .stSuccess, .stWarning, .stError {{
-            background-color: #495057;
-            color: white;
-            border: 1px solid #6c757d;
-            border-radius: 8px;
-        }}
-        
-        /* Dark mode text elements */
-        h1, h2, h3, h4, h5, h6 {{
-            color: white !important;
-        }}
-        
-        .stMarkdown, .stText, .stCheckbox, .stSelectbox {{
-            color: white;
-        }}
-        
-        /* Dark mode interactive elements */
-        .stSelectbox > div > div {{
-            background-color: #495057;
-            border: 2px solid #6c757d;
-            color: white;
-        }}
-        
-        .stSelectbox > div > div:hover {{
-            border-color: {COLORS['secondary']};
-        }}
-    </style>
-    """, unsafe_allow_html=True)
-else:
-    # Light mode styling
-    st.markdown(f"""
-    <style>
-        /* Light mode main styling */
-        .main {{
-            background: linear-gradient(135deg, {COLORS['light']} 0%, #ffffff 100%);
-            color: {COLORS['text_primary']};
-        }}
-        
-        /* Light mode headers */
-        .main .block-container h1 {{
-            color: {COLORS['primary']};
-            font-weight: 700;
-            border-bottom: 3px solid {COLORS['secondary']};
-            padding-bottom: 10px;
-            margin-bottom: 30px;
-        }}
-        
-        .main .block-container h2 {{
-            color: {COLORS['primary']};
-            font-weight: 600;
-            border-left: 4px solid {COLORS['secondary']};
-            padding-left: 15px;
-            margin-top: 30px;
-        }}
-        
-        .main .block-container h3 {{
-            color: {COLORS['text_primary']};
-            font-weight: 600;
-            margin-top: 25px;
-        }}
-        
-        /* Light mode sidebar */
-        .css-1d391kg {{
-            background: linear-gradient(180deg, {COLORS['dark']} 0%, #495057 100%);
-            color: white;
-        }}
-        
-        /* Light mode components */
-        .stDataFrame, .stMetric {{
-            border: 1px solid {COLORS['border']};
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }}
-        
-        /* Light mode interactive elements */
-        .stSelectbox > div > div {{
-            border: 2px solid {COLORS['border']};
-            border-radius: 6px;
-            transition: border-color 0.3s ease;
-        }}
-        
-        .stSelectbox > div > div:hover {{
-            border-color: {COLORS['primary']};
-        }}
-        
-        /* Light mode buttons */
-        .stButton > button {{
-            background: linear-gradient(45deg, {COLORS['primary']}, {COLORS['info']});
-            color: white;
-            border: none;
-            border-radius: 6px;
-            padding: 8px 16px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }}
-        
-        .stButton > button:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-        }}
-        
-        /* Responsive design */
-        @media (max-width: 768px) {{
-            .main .block-container h1 {{
-                font-size: 1.8rem;
-            }}
-            
-            .main .block-container h2 {{
-                font-size: 1.4rem;
-            }}
-        }}
-    </style>
-    """, unsafe_allow_html=True)
+    }}
+</style>
+""", unsafe_allow_html=True)
 
 st.title("US H-1B Lottery Petition Explorer")
 
@@ -1029,13 +900,11 @@ if st.sidebar.button("🔄 Clear Cache & Refresh", help="Clear all cached data a
     st.cache_resource.clear()
     st.rerun()
 
-# Dark mode toggle
-dark_mode = st.sidebar.checkbox("🌙 Dark Mode", value=False)
+
 
 # Company filter with priority list for Indian journalists
 st.sidebar.markdown("---")
 st.sidebar.markdown("**🏢 Company Filter**")
-st.sidebar.markdown("*Priority companies for Indian journalists (high H-1B volumes, frequently in news)*")
 
 # Independent filters (not cascading)
 # Company filter with priority list for Indian journalists
@@ -1262,25 +1131,7 @@ else:
                         "hovermode": 'closest'
                     }
                     
-                    # Apply dark mode styling
-                    if dark_mode:
-                        layout_kwargs.update({
-                            "paper_bgcolor": "#0e1117",
-                            "plot_bgcolor": "#0e1117",
-                            "font": {"color": "#fafafa"},
-                            "xaxis": {
-                                **layout_kwargs["xaxis"],
-                                "gridcolor": "#262730",
-                                "linecolor": "#262730",
-                                "tickfont": {"color": "#fafafa"}
-                            },
-                            "yaxis": {
-                                **layout_kwargs["yaxis"],
-                                "gridcolor": "#262730",
-                                "linecolor": "#262730",
-                                "tickfont": {"color": "#fafafa"}
-                            }
-                        })
+
                     
                     fig.update_layout(**layout_kwargs)
                     
@@ -1322,7 +1173,7 @@ with main_tab1:
         st.warning("⚠️ No data available for wage distribution analysis.")
         st.info("💡 Tip: Try selecting 'All' for some filters to see data.")
     else:
-        render_wage_distribution_tab(df, fig, config, dark_mode)
+        render_wage_distribution_tab(df, fig, config)
 
 with main_tab2:
     # Always load immediately for best UX
@@ -1346,11 +1197,11 @@ with main_tab3:
             st.warning("⚠️ No yearly data found for the selected filters.")
             st.info("💡 Tip: Try selecting 'All' for some filters to see yearly trends.")
         else:
-            render_yearly_analysis_tab(yearly_df, dark_mode, config, show_debug)
+            render_yearly_analysis_tab(yearly_df, config, show_debug)
 
 with main_tab4:
     # US Geographic Map - always load immediately for best UX
-    render_us_map_tab(company, year, soc_title, current_job_title, dark_mode)
+    render_us_map_tab(company, year, soc_title, current_job_title)
 
 with main_tab5:
     # Always load immediately for best UX
