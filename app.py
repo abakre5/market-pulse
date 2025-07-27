@@ -307,7 +307,6 @@ def get_yearly_data(company, state, city, soc_title):
             return pd.DataFrame()
 
 # Background rendering functions for each tab
-@st.cache_data(ttl=900, show_spinner=False, experimental_allow_widgets=True)
 def render_wage_distribution_tab(df, fig, config, dark_mode):
     """Render wage distribution tab content"""
     # Ensure config is not None
@@ -344,7 +343,6 @@ def render_wage_distribution_tab(df, fig, config, dark_mode):
     else:
         st.warning("No data available for visualization.")
 
-@st.cache_data(ttl=900, show_spinner=False, experimental_allow_widgets=True)
 def render_top_occupations_tab(df):
     """Render top occupations tab content"""
     st.subheader("💰 Highest Paid Occupations by Wage Level")
@@ -382,7 +380,6 @@ def render_top_occupations_tab(df):
     else:
         st.warning("No data available for analysis.")
 
-@st.cache_data(ttl=900, show_spinner=False, experimental_allow_widgets=True)
 def render_yearly_analysis_tab(yearly_df, dark_mode, config, show_debug=False):
     """Render yearly analysis tab content"""
     st.subheader("📈 Yearly Trends & Policy Impact Analysis")
@@ -565,7 +562,6 @@ def render_yearly_analysis_tab(yearly_df, dark_mode, config, show_debug=False):
     else:
         st.warning("No data available for yearly analysis.")
 
-@st.cache_data(ttl=60, show_spinner=False, experimental_allow_widgets=True)
 def render_us_map_tab(company, year, soc_title, job_title, dark_mode):
     """Render US map visualization tab - respects Company, Year, SOC Title, and Job Title filters only"""
     st.subheader("🗺️ US Geographic Distribution")
@@ -778,7 +774,6 @@ def render_us_map_tab(company, year, soc_title, job_title, dark_mode):
         else:
             st.warning("No wage level data available for the selected filters.")
 
-@st.cache_data(ttl=900, show_spinner=False, experimental_allow_widgets=True)
 def render_policy_summary_tab(df):
     """Render policy summary tab content"""
     st.subheader("📋 Policy Impact Summary")
@@ -1322,14 +1317,14 @@ with main_tab2:
     else:
         render_top_occupations_tab(df)
 
+# Debug checkbox outside cached function
+show_debug = st.checkbox("Show Yearly Analysis Debug Info", value=False)
+
 with main_tab3:
     # Lazy load yearly analysis data for better performance
     with st.spinner("Loading Yearly Analysis Data..."):
         # Get data for yearly analysis (respects all filters EXCEPT year)
         yearly_df = get_yearly_data(company, state, city, soc_title)
-        
-        # Debug checkbox outside cached function
-        show_debug = st.checkbox("Show Yearly Analysis Debug Info", value=False)
         
         # Handle empty yearly data
         if yearly_df.empty or len(yearly_df) == 0:
