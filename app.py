@@ -6,18 +6,13 @@ import numpy as np
 import plotly.graph_objects as go
 import time
 
+# Set page config at the very beginning
+st.set_page_config(page_title="H-1B Explorer", layout="wide")
+
 DB_FILE = 'job_market_std_employer.duckdb'  # Users need to create this database
 TABLE = 'job_market_data_aggressive_normalized'
 
-# Performance optimization: Create a connection pool
-@st.cache_resource
-def get_db_connection():
-    """Get a cached database connection"""
-    try:
-        return duckdb.connect(DB_FILE, read_only=True)
-    except Exception as e:
-        st.error(f"Failed to connect to database: {e}")
-        st.stop()
+from database_connection import get_db_connection
 
 @st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
 def get_filter_options():
@@ -785,10 +780,6 @@ def render_policy_summary_tab(df):
     else:
         st.warning("No data available for min wage analysis.")
 
-st.set_page_config(page_title="H-1B Lottery Explorer", layout="wide")
-
-
-
 # Professional color scheme for journalists and data analysts
 COLORS = {
     'primary': '#1f77b4',      # Professional blue
@@ -889,7 +880,8 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("US H-1B Lottery Petition Explorer")
+st.title("🔬 H-1B Explorer")
+st.markdown("**Research-grade analysis tool for H-1B lottery petition data with comprehensive filtering and statistical insights**")
 
 # Sidebar filters
 st.sidebar.header("Filters")
@@ -952,15 +944,15 @@ try:
 except (ValueError, IndexError):
     def_year = 0
 
-company = st.sidebar.selectbox("Company (Standardized Parent Name)", company_options, index=amazon_index)
+company = st.sidebar.selectbox("🏢 Company", company_options, index=amazon_index, help="Select a specific company or 'All' for all companies")
 
-year = st.sidebar.selectbox("Year", [str(y) for y in years], index=def_year)
-state = st.sidebar.selectbox("State", ["All"] + states, index=state_default)
+year = st.sidebar.selectbox("📅 Year", [str(y) for y in years], index=def_year, help="Select a specific year or 'All' for all years")
+state = st.sidebar.selectbox("🗺️ State", ["All"] + states, index=state_default, help="Select a specific state or 'All' for all states")
 
 # Cascading filters: City depends on State, SOC Title and Job Title are independent
 with st.spinner("Loading cities..."):
     cities = get_cities(state, company, year, None)
-city = st.sidebar.selectbox("City", ["All"] + cities)
+city = st.sidebar.selectbox("🏙️ City", ["All"] + cities, help="Select a specific city or 'All' for all cities")
 
 # Independent SOC Title filter
 with st.spinner("Loading SOC titles..."):
@@ -975,12 +967,12 @@ try:
 except (ValueError, IndexError):
     soc_title_default = 0
 
-soc_title = st.sidebar.selectbox("SOC Title", ["All"] + soc_titles, index=soc_title_default)
+soc_title = st.sidebar.selectbox("💼 Job Category", ["All"] + soc_titles, index=soc_title_default, help="Select a specific job category or 'All' for all categories")
 
 # Cascading Job Title filter (depends on SOC Title)
 with st.spinner("Loading job titles..."):
     job_titles = get_job_titles(company, soc_title, state, city, year)
-job_title = st.sidebar.selectbox("Job Title", ["All"] + job_titles)
+job_title = st.sidebar.selectbox("👨‍💻 Job Title", ["All"] + job_titles, help="Select a specific job title or 'All' for all titles")
 
 # Store the job_title value to ensure it's not affected by caching
 current_job_title = job_title
@@ -1142,8 +1134,12 @@ else:
     
     # Visualization creation is now handled in the data processing section above
 
-# New Policy Analysis Visualizations
-st.header("📊 H-1B Policy Impact Analysis")
+# ============================================================================
+# H-1B PETITION LOTTERY EXPLORER
+# ============================================================================
+
+st.header("🎯 H-1B Petition Lottery Explorer")
+st.markdown("**Comprehensive analysis of H-1B petition data to understand policy impacts, wage distributions, and market trends**")
 
 # Use tabs to organize all policy analysis and prevent overlapping
 main_tab1, main_tab2, main_tab3, main_tab4, main_tab5 = st.tabs([
