@@ -373,6 +373,7 @@ def render_wage_distribution_tab(df, fig, config):
     
     # Petitions by Wage Level table - FIRST
     st.subheader("Petitions by Wage Level")
+    st.markdown("📊 **What this shows**: Breakdown of how many H-1B petitions this company filed for each wage level (I-IV). Level I = entry-level, Level IV = senior positions.")
     if not df.empty and len(df) > 0:
         try:
             wage_level_counts = df['PW_WAGE_LEVEL'].value_counts().reset_index()
@@ -396,6 +397,7 @@ def render_wage_distribution_tab(df, fig, config):
     
     # Wage Distribution graph - SECOND
     st.subheader("Wage Distribution by Wage Level (Each Point = Lottery LCA)")
+    st.markdown("📈 **What this shows**: Visual distribution of salaries across wage levels. Each point represents an individual H-1B petition. Higher wage levels generally mean higher salaries and more senior positions.")
     if fig is not None:
         st.plotly_chart(fig, use_container_width=True, config=config)
     else:
@@ -404,6 +406,7 @@ def render_wage_distribution_tab(df, fig, config):
 def render_top_occupations_tab(df):
     """Render top occupations tab content"""
     st.subheader("💰 Highest Paid Occupations by Wage Level")
+    st.markdown("💼 **What this shows**: The highest-paying job categories for each wage level at this company. This helps identify which roles command the highest salaries within each experience level.")
     
     if not df.empty and len(df) > 0:
         try:
@@ -524,6 +527,7 @@ def render_yearly_analysis_tab(yearly_df, config):
             
             with tab1:
                 st.markdown("**Wage Level Distribution Trends (2020-2024)**")
+                st.markdown("📊 **What this shows**: How the company's hiring mix across wage levels has changed over time. This reveals whether they're hiring more entry-level or senior positions.")
                 
                 fig_yearly_trend = go.Figure()
                 # Professional color mapping for wage levels
@@ -558,6 +562,7 @@ def render_yearly_analysis_tab(yearly_df, config):
         
             with tab2:
                 st.markdown("**Salary Trends by Wage Level (2020-2024)**")
+                st.markdown("💰 **What this shows**: How average salaries for each wage level have changed over time. This indicates whether the company is paying more competitively or if salaries are stagnating.")
                 
                 # Create salary trend chart
                 fig_salary_trend = go.Figure()
@@ -594,15 +599,18 @@ def render_yearly_analysis_tab(yearly_df, config):
             
             with tab3:
                 st.markdown("**Yearly Summary Statistics**")
+                st.markdown("📋 **What this shows**: Key metrics for each year including total petitions, average/median/min/max salaries. This gives a quick overview of the company's H-1B hiring volume and salary ranges.")
                 st.dataframe(yearly_stats, use_container_width=True)
             
             with tab4:
                 st.markdown("**Wage Level Impact Analysis by Year**")
+                st.markdown("⚠️ **What this shows**: Analysis of how the new wage-based selection rule might impact this company. Shows the percentage of petitions at each wage level, helping understand vulnerability to policy changes.")
                 impact_df = pd.DataFrame(yearly_impact)
                 st.dataframe(impact_df, use_container_width=True)
         
             with tab5:
                 st.markdown("**Top Occupations by Year and Wage Level**")
+                st.markdown("💼 **What this shows**: The most common job categories for each wage level over time. This reveals how the company's hiring focus has evolved across different experience levels.")
                 
                 # Display in a more readable format
                 for key, data in yearly_occupations.items():
@@ -651,6 +659,7 @@ def render_us_map_tab(company, year, soc_title, job_title):
     
     with map_tab1:
         st.markdown("**H-1B Lottery Petitions by State**")
+        st.markdown("🗺️ **What this shows**: Geographic distribution of H-1B petitions across US states. Darker colors indicate more petitions, helping identify where this company has the strongest presence.")
         
         # Create choropleth map for petition count
         fig_map = px.choropleth(
@@ -693,6 +702,7 @@ def render_us_map_tab(company, year, soc_title, job_title):
     
     with map_tab2:
         st.markdown("**Average Salary by State**")
+        st.markdown("💰 **What this shows**: Average H-1B salaries by state for this company. Darker colors indicate higher salaries, helping identify which locations offer the best compensation.")
         
         # Create choropleth map for average salary
         fig_salary_map = px.choropleth(
@@ -735,6 +745,7 @@ def render_us_map_tab(company, year, soc_title, job_title):
     
     with map_tab3:
         st.markdown("**Wage Level Distribution by State**")
+        st.markdown("📊 **What this shows**: How wage levels are distributed across different states. This reveals whether certain states have more entry-level or senior positions for this company.")
         
         # Create stacked bar chart for wage levels by state
         wage_level_data = []
@@ -790,6 +801,7 @@ def render_us_map_tab(company, year, soc_title, job_title):
 def render_policy_summary_tab(df):
     """Render policy summary tab content"""
     st.subheader("📋 Policy Impact Summary")
+    st.markdown("📋 **What this shows**: Analysis of how recent H-1B policy changes (especially the wage-based selection rule) might impact this company's hiring patterns and what it means for job seekers.")
     
     # Check if we have data
     if df.empty:
@@ -1199,6 +1211,8 @@ main_tab1, main_tab2, main_tab3, main_tab4, main_tab5 = st.tabs([
 
 # Background rendering implementation with immediate loading
 with main_tab1:
+    st.info("💡 **Wage Distribution Analysis**: Explore how salaries are distributed across different wage levels (I-IV) for this company. This helps understand the company's hiring patterns and salary competitiveness.")
+    
     # Always load immediately for best UX
     if df.empty or len(df) == 0:
         st.warning("⚠️ No data available for wage distribution analysis.")
@@ -1207,6 +1221,8 @@ with main_tab1:
         render_wage_distribution_tab(df, fig, config)
 
 with main_tab2:
+    st.info("💡 **Top Occupations Analysis**: Discover the most common job titles and roles this company hires for H-1B positions. This shows the company's focus areas and career opportunities.")
+    
     # Always load immediately for best UX
     if df.empty or len(df) == 0:
         st.warning("⚠️ No data available for top occupations analysis.")
@@ -1215,6 +1231,8 @@ with main_tab2:
         render_top_occupations_tab(df)
 
 with main_tab3:
+    st.info("💡 **Yearly Analysis**: Track how this company's H-1B hiring patterns have changed over time (2020-2024). See trends in wage levels, salaries, and understand the impact of policy changes.")
+    
     # Lazy load yearly analysis data for better performance
     with st.spinner("Loading Yearly Analysis Data..."):
         # Get data for yearly analysis (respects all filters EXCEPT year)
@@ -1228,10 +1246,14 @@ with main_tab3:
             render_yearly_analysis_tab(yearly_df, config)
 
 with main_tab4:
+    st.info("💡 **US Geographic Map**: Visualize where this company has H-1B positions across the United States. This helps understand the company's geographic presence and where opportunities are located.")
+    
     # US Geographic Map - always load immediately for best UX
     render_us_map_tab(company, year, soc_title, current_job_title)
 
 with main_tab5:
+    st.info("💡 **Policy Summary**: Understand how recent H-1B policy changes (like the wage-based selection rule) might impact this company's hiring patterns and what it means for job seekers.")
+    
     # Always load immediately for best UX
     if df.empty or len(df) == 0:
         st.warning("⚠️ No data available for policy summary analysis.")

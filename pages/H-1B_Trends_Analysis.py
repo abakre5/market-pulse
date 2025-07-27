@@ -587,6 +587,9 @@ def get_salary_insights_data(company, state, soc_title, year_range, internationa
 st.markdown('<h1 class="main-header">📈 H-1B Trends Analysis</h1>', unsafe_allow_html=True)
 st.markdown("**Comprehensive analysis for H-1B visa holders - understand job market trends, salary expectations, and career development factors**")
 
+# Main page tooltip
+st.info("💡 **H-1B Trends Analysis**: This page provides comprehensive market-wide insights across all companies and locations. Use the sidebar filters to focus on specific companies, states, or job categories. Toggle between 'International Students Only' for entry-level positions or 'All Levels' for complete career analysis.")
+
 # ============================================================================
 # SIDEBAR FILTERS (Independent from main app)
 # ============================================================================
@@ -703,9 +706,11 @@ trends_tab1, trends_tab2, trends_tab3, trends_tab4, trends_tab5 = st.tabs(tab_ti
 with trends_tab1:
     if international_students_only:
         st.markdown('<h2 class="section-header">🎓 Entry-Level Opportunities for International Students</h2>', unsafe_allow_html=True)
+        st.markdown("💡 **What this shows**: Analysis of entry-level H-1B opportunities (Wage Levels I & II) over time. This helps international students understand job market trends, salary expectations, and plan their career strategy.")
         st.markdown('<div class="info-box">💡 <strong>Key Insight:</strong> Entry-level positions (Wage Level I & II) are typically where international students start their careers. Understanding these trends helps you plan your job search strategy.</div>', unsafe_allow_html=True)
     else:
         st.markdown('<h2 class="section-header">🎯 Job Opportunities Analysis</h2>', unsafe_allow_html=True)
+        st.markdown("💡 **What this shows**: Comprehensive analysis of H-1B job opportunities across all experience levels over time. This helps professionals understand market trends and plan their career development strategy.")
         st.markdown('<div class="info-box">💡 <strong>Key Insight:</strong> Understanding job market trends across all experience levels helps you plan your career development strategy.</div>', unsafe_allow_html=True)
     
     # Get yearly data for entry-level analysis
@@ -721,9 +726,11 @@ with trends_tab1:
             with col1:
                 if international_students_only:
                     st.markdown("**Entry-Level Opportunities by Year**")
+                    st.markdown("📈 **What this shows**: Number of entry-level H-1B petitions over time. This reveals whether the market is growing or shrinking for international students.")
                     chart_title = "Entry-Level H-1B Opportunities (Level I & II)"
                 else:
                     st.markdown("**Job Opportunities by Year**")
+                    st.markdown("📈 **What this shows**: Total number of H-1B petitions over time across all experience levels. This shows overall market trends and hiring patterns.")
                     chart_title = "H-1B Job Opportunities by Year"
                 
                 # Use aggregated data - SQL already did the work
@@ -738,9 +745,11 @@ with trends_tab1:
             with col2:
                 if international_students_only:
                     st.markdown("**Entry-Level Salary Trends**")
+                    st.markdown("💰 **What this shows**: Average salary trends for entry-level positions over time. This helps international students understand salary expectations and market competitiveness.")
                     chart_title = "Entry-Level Salary Trends by Year"
                 else:
                     st.markdown("**Salary Trends by Year**")
+                    st.markdown("💰 **What this shows**: Average salary trends across all experience levels over time. This helps professionals understand salary growth and market competitiveness.")
                     chart_title = "Salary Trends by Year"
                 
                 # Use aggregated data - SQL already calculated averages
@@ -808,9 +817,11 @@ with trends_tab1:
 with trends_tab2:
     if international_students_only:
         st.markdown('<h2 class="section-header">🏢 Top Employers for International Students</h2>', unsafe_allow_html=True)
+        st.markdown("💡 **What this shows**: Analysis of companies that hire the most international students and recent graduates. This helps identify the best employers for entry-level positions and understand their hiring patterns.")
         st.markdown('<div class="info-box">💡 <strong>Key Insight:</strong> These companies hire the most international students and recent graduates. Focus your job search on companies with high entry-level hiring rates.</div>', unsafe_allow_html=True)
     else:
         st.markdown('<h2 class="section-header">🏢 Top Employers Analysis</h2>', unsafe_allow_html=True)
+        st.markdown("💡 **What this shows**: Analysis of companies that hire the most H-1B workers across all experience levels. This helps identify the best employers and understand their hiring patterns across different career stages.")
         st.markdown('<div class="info-box">💡 <strong>Key Insight:</strong> These companies hire the most H-1B workers across all experience levels. Focus your job search on companies with high hiring rates.</div>', unsafe_allow_html=True)
     
     if not df.empty:
@@ -826,6 +837,7 @@ with trends_tab2:
             
             with col1:
                 st.markdown("**🏆 Top Companies by Hiring Volume**")
+                st.markdown("🏢 **What this shows**: Companies ranked by the number of H-1B petitions they filed. Larger bubbles indicate more hiring volume, and colors show average salary levels.")
                 # Use aggregated data - SQL already calculated the counts
                 fig_top_companies = px.scatter(top_companies_df, x='petition_count', y='company', 
                                              size='petition_count', color='avg_salary',
@@ -837,6 +849,7 @@ with trends_tab2:
             
             with col2:
                 st.markdown("**💰 Best Paying Companies**")
+                st.markdown("💰 **What this shows**: Companies with the highest average salaries (among those with 100+ petitions). This helps identify which employers offer the best compensation packages.")
                 # Filter to companies with 100+ petitions and use aggregated data
                 best_paying_df = top_companies_df[top_companies_df['petition_count'] >= 100].nlargest(15, 'avg_salary')
                 
@@ -1066,9 +1079,11 @@ with trends_tab2:
 with trends_tab3:
     if international_students_only:
         st.markdown('<h2 class="section-header">🗺️ Geographic Hotspots for International Students</h2>', unsafe_allow_html=True)
+        st.markdown("💡 **What this shows**: Geographic analysis of where entry-level H-1B opportunities are concentrated. This helps international students understand which states and cities offer the best job prospects and salary levels.")
         st.markdown('<div class="info-box">💡 <strong>Key Insight:</strong> Some states and cities have more opportunities for international students. Understanding geographic trends helps you decide where to focus your job search and potentially relocate.</div>', unsafe_allow_html=True)
     else:
         st.markdown('<h2 class="section-header">🗺️ Geographic Hotspots Analysis</h2>', unsafe_allow_html=True)
+        st.markdown("💡 **What this shows**: Geographic analysis of where H-1B opportunities are concentrated across all experience levels. This helps professionals understand which states and cities offer the best job prospects and salary levels.")
         st.markdown('<div class="info-box">💡 <strong>Key Insight:</strong> Some states and cities have more opportunities for H-1B workers. Understanding geographic trends helps you decide where to focus your job search and potentially relocate.</div>', unsafe_allow_html=True)
     
     if not df.empty:
@@ -1081,6 +1096,7 @@ with trends_tab3:
             
             with col1:
                 st.markdown("**🗺️ Top States by Opportunity Volume**")
+                st.markdown("🗺️ **What this shows**: States ranked by the number of H-1B petitions. Larger bubbles indicate more opportunities, and colors show average salary levels across states.")
                 # Use aggregated data - SQL already calculated the counts
                 top_states_viz = top_states_df.head(15)
                 fig_top_states = px.scatter(top_states_viz, x='petition_count', y='state', 
@@ -1093,6 +1109,7 @@ with trends_tab3:
             
             with col2:
                 st.markdown("**💰 Best Paying States**")
+                st.markdown("💰 **What this shows**: States with the highest average salaries (among those with 100+ petitions). This helps identify which locations offer the best compensation packages.")
                 # Filter to states with 100+ petitions and use aggregated data
                 best_paying_states = top_states_df[top_states_df['petition_count'] >= 100].nlargest(15, 'avg_salary')
                 
@@ -1140,9 +1157,11 @@ with trends_tab3:
 with trends_tab4:
     if international_students_only:
         st.markdown('<h2 class="section-header">💼 Career Paths for International Students</h2>', unsafe_allow_html=True)
+        st.markdown("💡 **What this shows**: Analysis of career paths with the most opportunities and best salaries for entry-level positions. This helps international students choose the right field of study and career direction.")
         st.markdown('<div class="info-box">💡 <strong>Key Insight:</strong> Understanding which career paths have the most opportunities and best salaries helps you make informed decisions about your field of study and career direction. AI jobs are growing exponentially!</div>', unsafe_allow_html=True)
     else:
         st.markdown('<h2 class="section-header">💼 Career Paths Analysis</h2>', unsafe_allow_html=True)
+        st.markdown("💡 **What this shows**: Analysis of career paths with the most opportunities and best salaries across all experience levels. This helps professionals make informed decisions about career direction and skill development.")
         st.markdown('<div class="info-box">💡 <strong>Key Insight:</strong> Understanding which career paths have the most opportunities and best salaries helps you make informed decisions about your career direction. AI jobs are growing exponentially!</div>', unsafe_allow_html=True)
     
     if not df.empty:
@@ -1169,6 +1188,7 @@ with trends_tab4:
             
             with col1:
                 st.markdown("**📈 Top Career Paths Growth Trends (2020-2024)**")
+                st.markdown("📈 **What this shows**: How the most popular career paths have grown over time. This reveals which fields are expanding and creating more opportunities.")
                 
                 # Get top 10 career paths by total count (data already filtered at SQL level)
                 top_10_careers = combined_entry_careers['aggressive_normalized_soc_title'].value_counts().head(10).index.tolist()
@@ -1187,6 +1207,7 @@ with trends_tab4:
             
             with col2:
                 st.markdown("**💰 Best Paying Career Paths Salary Trends (2020-2024)**")
+                st.markdown("💰 **What this shows**: How salaries for the highest-paying career paths have changed over time. This helps understand which fields offer the best compensation growth.")
                 
                 # Get top 10 paying career paths using aggregated data
                 career_salary = combined_entry_careers.groupby('aggressive_normalized_soc_title').agg({
@@ -1312,9 +1333,11 @@ with trends_tab4:
 with trends_tab5:
     if international_students_only:
         st.markdown('<h2 class="section-header">💰 Salary Insights for International Students</h2>', unsafe_allow_html=True)
+        st.markdown("💡 **What this shows**: Comprehensive salary analysis for entry-level positions across different fields, locations, and company types. This helps international students understand salary expectations and negotiate better offers.")
         st.markdown('<div class="info-box">💡 <strong>Key Insight:</strong> Understanding salary expectations helps you negotiate better offers and plan your financial future. Entry-level salaries vary significantly by field, location, and company type.</div>', unsafe_allow_html=True)
     else:
         st.markdown('<h2 class="section-header">💰 Salary Insights Analysis</h2>', unsafe_allow_html=True)
+        st.markdown("💡 **What this shows**: Comprehensive salary analysis across all experience levels, fields, locations, and company types. This helps professionals understand salary expectations and negotiate better offers.")
         st.markdown('<div class="info-box">💡 <strong>Key Insight:</strong> Understanding salary expectations helps you negotiate better offers and plan your financial future. Salaries vary significantly by field, location, experience level, and company type.</div>', unsafe_allow_html=True)
     
     if not df.empty:
@@ -1326,6 +1349,7 @@ with trends_tab5:
             
             with col1:
                 st.markdown("**Entry-Level Salary Distribution by Field**")
+                st.markdown("💰 **What this shows**: Average salaries for different fields in entry-level positions. This helps identify which fields offer the best starting compensation.")
                 # Top 10 fields for entry-level using aggregated data
                 top_fields = salary_insights_df['aggressive_normalized_soc_title'].value_counts().head(10).index.tolist()
                 top_fields_data = salary_insights_df[salary_insights_df['aggressive_normalized_soc_title'].isin(top_fields)]
@@ -1338,6 +1362,7 @@ with trends_tab5:
             
             with col2:
                 st.markdown("**Entry-Level Salary Trends by Year**")
+                st.markdown("📈 **What this shows**: Top 10 highest-paying fields ranked by average salary. This helps identify the most lucrative career paths for entry-level positions.")
                 # Use aggregated data for salary trends
                 salary_trends = salary_insights_df.groupby('aggressive_normalized_soc_title')['avg_salary'].mean().reset_index()
                 
@@ -1349,6 +1374,7 @@ with trends_tab5:
             
             # Enhanced Salary by Location with Better Visualization
             st.markdown("**🗺️ Salary by Location**")
+            st.markdown("🗺️ **What this shows**: Geographic distribution of salaries across states. Larger bubbles indicate more opportunities, and colors show salary levels. This helps identify the best-paying locations.")
             # Use top states data for location salary analysis
             location_salary = top_states_df[top_states_df['petition_count'] >= 100].nlargest(15, 'avg_salary')
             
