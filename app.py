@@ -52,21 +52,22 @@ TABLE = 'job_market_data_aggressive_normalized'
 
 from database_connection import get_db_connection
 
-@st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
 def get_filter_options():
-    with st.spinner("Loading filter options..."):
-        try:
-            con = get_db_connection()
-            companies = con.execute(f"SELECT DISTINCT STD_EMPLOYER_NAME_PARENT FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE AND STD_EMPLOYER_NAME_PARENT != '' ORDER BY STD_EMPLOYER_NAME_PARENT").fetchdf()['STD_EMPLOYER_NAME_PARENT'].tolist()
-            years = con.execute(f"SELECT DISTINCT YEAR FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE ORDER BY YEAR").fetchdf()['YEAR'].tolist()
-            states = con.execute(f"SELECT DISTINCT EMPLOYER_STATE FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE AND EMPLOYER_STATE IS NOT NULL ORDER BY EMPLOYER_STATE").fetchdf()['EMPLOYER_STATE'].tolist()
-            soc_titles = con.execute(f"SELECT DISTINCT aggressive_normalized_soc_title FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE AND aggressive_normalized_soc_title IS NOT NULL ORDER BY aggressive_normalized_soc_title").fetchdf()['aggressive_normalized_soc_title'].tolist()
-            return companies, years, states, soc_titles
-        except Exception as e:
-            st.error(f"Failed to load filter options: {e}")
+    try:
+        con = get_db_connection()
+        if con is None:
             return [], [], [], []
+        
+        # Light queries with minimal data
+        companies = con.execute(f"SELECT DISTINCT STD_EMPLOYER_NAME_PARENT FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE AND STD_EMPLOYER_NAME_PARENT != '' ORDER BY STD_EMPLOYER_NAME_PARENT LIMIT 500").fetchdf()['STD_EMPLOYER_NAME_PARENT'].tolist()
+        years = con.execute(f"SELECT DISTINCT YEAR FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE ORDER BY YEAR").fetchdf()['YEAR'].tolist()
+        states = con.execute(f"SELECT DISTINCT EMPLOYER_STATE FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE AND EMPLOYER_STATE IS NOT NULL ORDER BY EMPLOYER_STATE").fetchdf()['EMPLOYER_STATE'].tolist()
+        soc_titles = con.execute(f"SELECT DISTINCT aggressive_normalized_soc_title FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE AND aggressive_normalized_soc_title IS NOT NULL ORDER BY aggressive_normalized_soc_title LIMIT 300").fetchdf()['aggressive_normalized_soc_title'].tolist()
+        return companies, years, states, soc_titles
+    except Exception as e:
+        st.error(f"Failed to load filter options: {e}")
+        return [], [], [], []
 
-@st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes
 def get_cities(state, company, year, soc_title):
     with st.spinner("Loading cities..."):
         try:
@@ -92,7 +93,6 @@ def get_cities(state, company, year, soc_title):
             st.error(f"Failed to load cities: {e}")
             return []
 
-@st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes
 def get_all_cities():
     """Get all cities independently"""
     with st.spinner("Loading all cities..."):
@@ -105,7 +105,6 @@ def get_all_cities():
             st.error(f"Failed to load all cities: {e}")
             return []
 
-@st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes
 def get_all_companies():
     """Get all companies independently"""
     with st.spinner("Loading all companies..."):
@@ -118,7 +117,6 @@ def get_all_companies():
             st.error(f"Failed to load all companies: {e}")
             return []
 
-@st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes
 def get_all_years():
     """Get all years independently"""
     with st.spinner("Loading all years..."):
@@ -131,7 +129,6 @@ def get_all_years():
             st.error(f"Failed to load all years: {e}")
             return []
 
-@st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes
 def get_all_states():
     """Get all states independently"""
     with st.spinner("Loading all states..."):
@@ -144,7 +141,6 @@ def get_all_states():
             st.error(f"Failed to load all states: {e}")
             return []
 
-@st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes
 def get_all_soc_titles():
     """Get all SOC titles independently"""
     with st.spinner("Loading all SOC titles..."):
@@ -157,7 +153,6 @@ def get_all_soc_titles():
             st.error(f"Failed to load all SOC titles: {e}")
             return []
 
-@st.cache_data(ttl=900, show_spinner=False)  # Cache for 15 minutes
 def get_filtered_data(company, year, state, city, soc_title):
     with st.spinner("Loading filtered data..."):
         try:
@@ -180,12 +175,15 @@ def get_filtered_data(company, year, state, city, soc_title):
                 query += " AND aggressive_normalized_soc_title = ?"
                 params.append(soc_title)
             df = con.execute(query, params).fetchdf()
+            
+            # Cleanup resources after data loading
+            gc.collect()
+            
             return df
         except Exception as e:
             st.error(f"Failed to load filtered data: {e}")
             return pd.DataFrame()
 
-@st.cache_data(ttl=60, show_spinner=False)  # Cache for 1 minute to ensure quick filter updates
 def get_company_state_data(company, year, soc_title, job_title):
     """Get company data by state for map visualization - respects Company, Year, SOC Title, and Job Title filters only"""
     with st.spinner("Loading company state data..."):
@@ -240,7 +238,6 @@ def get_company_state_data(company, year, soc_title, job_title):
             st.error(f"Failed to load company state data: {e}")
             return pd.DataFrame()
 
-@st.cache_data(ttl=60, show_spinner=False)  # Cache for 1 minute to ensure quick filter updates
 def get_job_titles(company, soc_title, state, city, year):
     with st.spinner("Loading job titles..."):
         try:
@@ -269,7 +266,6 @@ def get_job_titles(company, soc_title, state, city, year):
             st.error(f"Failed to load job titles: {e}")
             return []
 
-@st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes
 def get_soc_titles(company, state, city, year):
     with st.spinner("Loading SOC titles..."):
         try:
@@ -295,7 +291,6 @@ def get_soc_titles(company, state, city, year):
             st.error(f"Failed to load SOC titles: {e}")
             return []
 
-@st.cache_data(ttl=900, show_spinner=False)  # Cache for 15 minutes
 def get_yearly_data(company, state, city, soc_title):
     """Get data for yearly analysis - shows all years 2020-2024 regardless of filters"""
     with st.spinner("Loading yearly analysis data..."):
@@ -333,6 +328,9 @@ def get_yearly_data(company, state, city, soc_title):
                 df = pd.concat(all_data, ignore_index=True)
             else:
                 df = pd.DataFrame()
+            
+            # Cleanup resources after data loading
+            gc.collect()
             
             return df
         except Exception as e:
@@ -413,7 +411,6 @@ def render_top_occupations_tab(df):
     else:
         st.warning("No data available for analysis.")
 
-@st.cache_data(ttl=900, show_spinner=False)
 def process_yearly_analysis_data(yearly_df):
     """Process yearly analysis data - cached function for expensive computations"""
     if yearly_df.empty or len(yearly_df) == 0:
@@ -924,19 +921,6 @@ st.markdown("**Research-grade analysis tool for H-1B lottery petition data with 
 # Sidebar filters
 st.sidebar.header("Filters")
 
-# Memory status indicator
-if 'memory_available' in st.session_state and st.session_state['memory_available'] is not None:
-    memory_gb = st.session_state['memory_available']
-    if memory_gb > 4:
-        st.sidebar.success(f"💾 Memory: {memory_gb:.1f}GB available")
-    elif memory_gb > 2:
-        st.sidebar.warning(f"⚠️ Memory: {memory_gb:.1f}GB available")
-    else:
-        st.sidebar.error(f"🚨 Memory: {memory_gb:.1f}GB available - Low memory!")
-elif PSUTIL_AVAILABLE:
-    st.sidebar.info("💾 Memory status: Loading...")
-else:
-    st.sidebar.info("💾 Memory monitoring: Disabled")
 
 # Independent filters (not cascading)
 # Company filter with priority list for Indian journalists
