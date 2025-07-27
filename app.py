@@ -5,9 +5,47 @@ import plotly.express as px
 import numpy as np
 import plotly.graph_objects as go
 import time
+import gc
+
+# Try to import psutil for memory monitoring
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+    st.warning("psutil not available - memory monitoring disabled")
+
+# Memory optimization
+def optimize_memory():
+    """Optimize memory usage for heavy data processing"""
+    try:
+        # Force garbage collection
+        gc.collect()
+        
+        # Get memory info if psutil is available
+        if PSUTIL_AVAILABLE:
+            memory = psutil.virtual_memory()
+            st.session_state['memory_available'] = memory.available / (1024**3)  # GB
+        else:
+            st.session_state['memory_available'] = None
+        
+        # Set pandas memory optimization
+        pd.options.mode.chained_assignment = None
+        
+        # Set numpy to use less memory
+        np.set_printoptions(precision=3, suppress=True)
+        
+        return True
+    except Exception as e:
+        st.warning(f"Memory optimization failed: {e}")
+        return False
 
 # Set page config at the very beginning
 st.set_page_config(page_title="H-1B Explorer", layout="wide")
+
+# Initialize memory optimization
+if 'memory_optimized' not in st.session_state:
+    st.session_state['memory_optimized'] = optimize_memory()
 
 DB_FILE = 'job_market_std_employer.duckdb'  # Users need to create this database
 TABLE = 'job_market_data_aggressive_normalized'
@@ -885,6 +923,20 @@ st.markdown("**Research-grade analysis tool for H-1B lottery petition data with 
 
 # Sidebar filters
 st.sidebar.header("Filters")
+
+# Memory status indicator
+if 'memory_available' in st.session_state and st.session_state['memory_available'] is not None:
+    memory_gb = st.session_state['memory_available']
+    if memory_gb > 4:
+        st.sidebar.success(f"💾 Memory: {memory_gb:.1f}GB available")
+    elif memory_gb > 2:
+        st.sidebar.warning(f"⚠️ Memory: {memory_gb:.1f}GB available")
+    else:
+        st.sidebar.error(f"🚨 Memory: {memory_gb:.1f}GB available - Low memory!")
+elif PSUTIL_AVAILABLE:
+    st.sidebar.info("💾 Memory status: Loading...")
+else:
+    st.sidebar.info("💾 Memory monitoring: Disabled")
 
 # Independent filters (not cascading)
 # Company filter with priority list for Indian journalists
