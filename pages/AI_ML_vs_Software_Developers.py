@@ -21,6 +21,323 @@ def get_comprehensive_ai_ml_data():
     # The data represents REAL AI/ML vs Software Developer trends from 2020-2024
     # Based on actual H-1B data from the database
     
+    # ORIGINAL SQL QUERY (COMMENTED OUT FOR PERFORMANCE)
+    # The original query was taking 2+ seconds to load, so we hardcoded the results
+    # since this page has no filters and the data never changes
+    #
+    # with st.spinner("Loading comprehensive AI/ML vs Software Developers data..."):
+    #     try:
+    #         con = get_db_connection()
+    #         if con is None:
+    #             return pd.DataFrame()
+    #         
+    #         # Single optimized query that gets all data needed
+    #         query = f'''
+    #         WITH career_categories AS (
+    #             SELECT 
+    #                 YEAR,
+    #                 EMPLOYER_STATE,
+    #                 STD_EMPLOYER_NAME_PARENT,
+    #                 CASE 
+    #                     WHEN (
+    #                         -- Comprehensive AI/ML titles (excluding overly broad %engineer%)
+    #                          LOWER(JOB_TITLE) LIKE '%ai engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ml engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%machine learning engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%artificial intelligence engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%deep learning engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ai/ml engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ai-ml engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ai ml engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%computer vision engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%nlp engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%natural language engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%robotics engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%autonomous engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%self-driving engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%recommendation engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%search engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ranking engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%mlops engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%machine learning ops%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ai infrastructure engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ml infrastructure engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ai platform engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ml platform engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%llm engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%large language model engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%transformer engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%generative ai engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%genai engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%diffusion engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%multimodal engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%vision-language engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ai algorithm developer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%perception engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%conversational ai engineer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ai researcher%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ml researcher%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%machine learning researcher%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ai scientist%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ml scientist%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%machine learning scientist%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ai specialist%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ml specialist%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%machine learning specialist%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ai developer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ml developer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%machine learning developer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%artificial intelligence%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%machine learning%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%deep learning%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%computer vision%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%natural language processing%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%robotics%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%autonomous%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%self-driving%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%recommendation%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%nlp%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%search%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ranking%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%mlops%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%machine learning ops%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%machine%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ai infrastructure%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ml infrastructure%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ai platform%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ml platform%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%llm%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%large language model%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%transformer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%generative ai%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%genai%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%diffusion%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%multimodal%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%vision-language%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ai algorithm%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ai/ml%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ai-ml%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ai ml%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%perception%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%conversational%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%neural network%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%neural networks%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%tensorflow%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%pytorch%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%keras%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%scikit%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%opencv%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%bert%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%gpt%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%spark%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%hadoop%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%kafka%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%airflow%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%kubernetes%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%jupyter%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%notebook%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%colab%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%databricks%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%mlflow%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%kubeflow%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%sagemaker%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%vertex ai%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ai platform%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ml platform%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ai infrastructure%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ml infrastructure%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%chatbot%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%conversational ai%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%dialogue%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%fraud detection%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%anomaly detection%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%personalization%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%autonomous driving%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%autopilot%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%science%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%robotic process automation%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%rpa%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%big data%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%perception%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%vision%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%speech%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%language%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%conversation%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%dialogue%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%cto%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ceo%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%director%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%chief%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%vp%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%vice president%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%vice%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%chatbot%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%autonomous%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%self-driving%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%autopilot%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%robotics%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%computer vision%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%nlp%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%natural language%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%deep learning%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%neural%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%transformer%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%llm%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%large language%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%generative%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%genai%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%diffusion%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%multimodal%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%vision-language%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%algorithm%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ai/ml%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ai-ml%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ai ml%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%conversational%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%neural network%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%neural networks%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%tensorflow%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%pytorch%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%keras%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%scikit%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%opencv%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%bert%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%gpt%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%spark%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%hadoop%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%kafka%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%airflow%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%kubernetes%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%jupyter%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%notebook%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%colab%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%databricks%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%mlflow%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%kubeflow%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%sagemaker%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%vertex ai%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ai platform%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ml platform%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ai infrastructure%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%ml infrastructure%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%chatbot%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%conversational ai%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%dialogue%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%fraud detection%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%anomaly detection%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%personalization%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%autonomous driving%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%autopilot%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%robotic process automation%' OR
+    #                         LOWER(JOB_TITLE) LIKE '%rpa%'
+    #                     ) 
+    #                     THEN 'AI/ML Engineers'
+    #                     WHEN aggressive_normalized_soc_title = 'Software Developers'
+    #                     THEN 'Software Developers'
+    #                     ELSE 'Other'
+    #                 END as career_category,
+    #                 PREVAILING_WAGE,
+    #                 PW_WAGE_LEVEL
+    #             FROM {TABLE} 
+    #             WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE 
+    #             AND YEAR BETWEEN 2020 AND 2024
+    #         ),
+    #         main_data AS (
+    #             SELECT 
+    #                 YEAR,
+    #                 career_category,
+    #                 COUNT(*) as petition_count,
+    #                 AVG(PREVAILING_WAGE) as avg_salary,
+    #                 MIN(PREVAILING_WAGE) as min_salary,
+    #                 MAX(PREVAILING_WAGE) as max_salary,
+    #                 COUNT(CASE WHEN PW_WAGE_LEVEL = 'I' THEN 1 END) as levelI_count,
+    #                 COUNT(CASE WHEN PW_WAGE_LEVEL = 'II' THEN 1 END) as levelII_count,
+    #                 COUNT(CASE WHEN PW_WAGE_LEVEL = 'III' THEN 1 END) as levelIII_count,
+    #                 COUNT(CASE WHEN PW_WAGE_LEVEL = 'IV' THEN 1 END) as levelIV_count
+    #             FROM career_categories
+    #             WHERE career_category IN ('AI/ML Engineers', 'Software Developers')
+    #             GROUP BY YEAR, career_category
+    #         ),
+    #         employer_data AS (
+    #             SELECT 
+    #                 STD_EMPLOYER_NAME_PARENT,
+    #                 COUNT(*) as petition_count
+    #             FROM career_categories
+    #             WHERE career_category = 'AI/ML Engineers' AND STD_EMPLOYER_NAME_PARENT != ''
+    #             GROUP BY STD_EMPLOYER_NAME_PARENT
+    #             ORDER BY petition_count DESC
+    #             LIMIT 15
+    #         ),
+    #         state_data AS (
+    #             SELECT 
+    #                 EMPLOYER_STATE,
+    #                 COUNT(*) as petition_count
+    #             FROM career_categories
+    #             WHERE career_category = 'AI/ML Engineers' AND EMPLOYER_STATE IS NOT NULL
+    #             GROUP BY EMPLOYER_STATE
+    #             ORDER BY petition_count DESC
+    #             LIMIT 15
+    #         )
+    #         SELECT 
+    #             'main' as data_type,
+    #             YEAR,
+    #             career_category,
+    #             petition_count,
+    #             avg_salary,
+    #             min_salary,
+    #             max_salary,
+    #             levelI_count,
+    #             levelII_count,
+    #             levelIII_count,
+    #             levelIV_count,
+    #             NULL as employer_state,
+    #             NULL as std_employer_name_parent
+    #         FROM main_data
+    #         UNION ALL
+    #         SELECT 
+    #             'employer' as data_type,
+    #             NULL as YEAR,
+    #             'AI/ML Engineers' as career_category,
+    #             petition_count,
+    #             NULL as avg_salary,
+    #             NULL as min_salary,
+    #             NULL as max_salary,
+    #             NULL as levelI_count,
+    #             NULL as levelII_count,
+    #             NULL as levelIII_count,
+    #             NULL as levelIV_count,
+    #             NULL as employer_state,
+    #             STD_EMPLOYER_NAME_PARENT as std_employer_name_parent
+    #         FROM employer_data
+    #         UNION ALL
+    #         SELECT 
+    #             'state' as data_type,
+    #             NULL as YEAR,
+    #             'AI/ML Engineers' as career_category,
+    #             petition_count,
+    #             NULL as avg_salary,
+    #             NULL as min_salary,
+    #             NULL as max_salary,
+    #             NULL as levelI_count,
+    #             NULL as levelII_count,
+    #             NULL as levelIII_count,
+    #             NULL as levelIV_count,
+    #             EMPLOYER_STATE as employer_state,
+    #             NULL as std_employer_name_parent
+    #         FROM state_data
+    #         ORDER BY data_type, YEAR, career_category
+    #         '''
+    #         
+    #         df = con.execute(query).fetchdf()
+    #         
+    #         # Force cleanup
+    #         gc.collect()
+    #         
+    #         return df
+    #     except Exception as e:
+    #         st.error(f"Error fetching comprehensive AI/ML data: {e}")
+    #         return pd.DataFrame()
+    
     # Create data with proper structure using REAL database results
     data = []
     
