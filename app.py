@@ -41,7 +41,7 @@ def optimize_memory():
         return False
 
 # Set page config at the very beginning
-st.set_page_config(page_title="H-1B Explorer", layout="wide")
+st.set_page_config(page_title="H-1B Company-Level Explorer", layout="wide")
 
 # Initialize memory optimization
 if 'memory_optimized' not in st.session_state:
@@ -500,20 +500,13 @@ def process_yearly_analysis_data(yearly_df):
     
     return yearly_wage_pct, salary_trends, yearly_stats, yearly_impact, yearly_occupations
 
-def render_yearly_analysis_tab(yearly_df, config, show_debug=False):
+def render_yearly_analysis_tab(yearly_df, config):
     """Render yearly analysis tab content"""
     st.subheader("📈 Yearly Trends & Policy Impact Analysis")
     
     # Ensure config is not None
     if config is None:
         config = {}
-    
-    # Show debug info about the data
-    if show_debug:
-        st.info(f"Yearly Analysis Data: {len(yearly_df)} total records")
-        if not yearly_df.empty:
-            years_in_data = sorted(yearly_df['YEAR'].unique())
-            st.info(f"Years in data: {years_in_data}")
     
     if not yearly_df.empty and len(yearly_df) > 0:
         # Process data using cached function
@@ -942,8 +935,8 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🔬 H-1B Explorer")
-st.markdown("**Research-grade analysis tool for H-1B lottery petition data with comprehensive filtering and statistical insights**")
+st.title("🏢 H-1B Company-Level Explorer")
+st.markdown("**Company-specific analysis tool for H-1B lottery petition data - dive deep into individual company hiring patterns, wage distributions, and policy impacts**")
 
 # Sidebar filters
 st.sidebar.header("Filters")
@@ -983,31 +976,26 @@ priority_companies = [
 # Filter out companies that are already in priority list
 available_companies = [company for company in companies if company not in priority_companies]
 
-# Create the company options with priority list at top
-company_options = ["All"] + priority_companies + ["--- Other Companies ---"] + available_companies
+# Create the company options with priority list at top (company-level analysis only)
+company_options = priority_companies + ["--- Other Companies ---"] + available_companies
 
 # Find default index for Amazon (most popular)
 try:
-    amazon_index = company_options.index("AMAZON") if "AMAZON" in company_options else 1
+    amazon_index = company_options.index("AMAZON") if "AMAZON" in company_options else 0
 except ValueError:
-    amazon_index = 1
+    amazon_index = 0
 
 # Set default selections with safe indexing
-state_default = 0
-try:
-    if states and 'WA' in states:
-        state_default = states.index('WA') + 1
-except (ValueError, IndexError):
-    state_default = 0
+state_default = 0  # "All" is at index 0
 
 def_year = 0
 try:
     if years and 2024 in years:
-        def_year = [str(y) for y in years].index('2024')  # No +1 since no 'All' option
+        def_year = [str(y) for y in years].index('2024')  # Default to 2024
 except (ValueError, IndexError):
     def_year = 0
 
-company = st.sidebar.selectbox("🏢 Company", company_options, index=amazon_index, help="Select a specific company or 'All' for all companies")
+company = st.sidebar.selectbox("🏢 Company", company_options, index=amazon_index, help="Select a specific company for detailed analysis")
 
 year = st.sidebar.selectbox("📅 Year", [str(y) for y in years], index=def_year, help="Select a specific year or 'All' for all years")
 state = st.sidebar.selectbox("🗺️ State", ["All"] + states, index=state_default, help="Select a specific state or 'All' for all states")
@@ -1025,7 +1013,7 @@ try:
     if soc_titles:
         for i, t in enumerate(soc_titles):
             if t and t.lower().startswith('software developers'):
-                soc_title_default = i + 1
+                soc_title_default = i + 1  # +1 because "All" is at index 0
                 break
 except (ValueError, IndexError):
     soc_title_default = 0
@@ -1047,10 +1035,6 @@ with st.spinner("Loading data..."):
     if job_title and job_title != 'All':
         df = df[df['NORMALIZED_JOB_TITLE'] == job_title]
     load_time = time.time() - start_time
-    
-    # Show performance info in debug mode
-    if st.checkbox("Show Performance Info", value=False):
-        st.info(f"Data loaded in {load_time:.3f} seconds")
 
 # Stats
 st.header("Summary Stats")
@@ -1230,9 +1214,6 @@ with main_tab2:
     else:
         render_top_occupations_tab(df)
 
-# Debug checkbox outside cached function
-show_debug = st.checkbox("Show Yearly Analysis Debug Info", value=False)
-
 with main_tab3:
     # Lazy load yearly analysis data for better performance
     with st.spinner("Loading Yearly Analysis Data..."):
@@ -1244,7 +1225,7 @@ with main_tab3:
             st.warning("⚠️ No yearly data found for the selected filters.")
             st.info("💡 Tip: Try selecting 'All' for some filters to see yearly trends.")
         else:
-            render_yearly_analysis_tab(yearly_df, config, show_debug)
+            render_yearly_analysis_tab(yearly_df, config)
 
 with main_tab4:
     # US Geographic Map - always load immediately for best UX
