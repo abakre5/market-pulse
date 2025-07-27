@@ -58,11 +58,14 @@ def get_filter_options():
         if con is None:
             return [], [], [], []
         
-        # Light queries with minimal data
-        companies = con.execute(f"SELECT DISTINCT STD_EMPLOYER_NAME_PARENT FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE AND STD_EMPLOYER_NAME_PARENT != '' ORDER BY STD_EMPLOYER_NAME_PARENT LIMIT 500").fetchdf()['STD_EMPLOYER_NAME_PARENT'].tolist()
+        # Load only necessary data - no limits
+        companies = con.execute(f"SELECT DISTINCT STD_EMPLOYER_NAME_PARENT FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE AND STD_EMPLOYER_NAME_PARENT != '' ORDER BY STD_EMPLOYER_NAME_PARENT").fetchdf()['STD_EMPLOYER_NAME_PARENT'].tolist()
         years = con.execute(f"SELECT DISTINCT YEAR FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE ORDER BY YEAR").fetchdf()['YEAR'].tolist()
         states = con.execute(f"SELECT DISTINCT EMPLOYER_STATE FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE AND EMPLOYER_STATE IS NOT NULL ORDER BY EMPLOYER_STATE").fetchdf()['EMPLOYER_STATE'].tolist()
-        soc_titles = con.execute(f"SELECT DISTINCT aggressive_normalized_soc_title FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE AND aggressive_normalized_soc_title IS NOT NULL ORDER BY aggressive_normalized_soc_title LIMIT 300").fetchdf()['aggressive_normalized_soc_title'].tolist()
+        soc_titles = con.execute(f"SELECT DISTINCT aggressive_normalized_soc_title FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE AND aggressive_normalized_soc_title IS NOT NULL ORDER BY aggressive_normalized_soc_title").fetchdf()['aggressive_normalized_soc_title'].tolist()
+        # Force cleanup after loading filter options
+        gc.collect()
+        
         return companies, years, states, soc_titles
     except Exception as e:
         st.error(f"Failed to load filter options: {e}")
@@ -88,6 +91,10 @@ def get_cities(state, company, year, soc_title):
                 params.append(soc_title)
             query += " ORDER BY EMPLOYER_CITY"
             cities = con.execute(query, params).fetchdf()['EMPLOYER_CITY'].tolist()
+            
+            # Cleanup after loading cities
+            gc.collect()
+            
             return cities
         except Exception as e:
             st.error(f"Failed to load cities: {e}")
@@ -100,6 +107,10 @@ def get_all_cities():
             con = get_db_connection()
             query = f"SELECT DISTINCT EMPLOYER_CITY FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE AND EMPLOYER_CITY IS NOT NULL ORDER BY EMPLOYER_CITY"
             cities = con.execute(query).fetchdf()['EMPLOYER_CITY'].tolist()
+            
+            # Cleanup after loading all cities
+            gc.collect()
+            
             return cities
         except Exception as e:
             st.error(f"Failed to load all cities: {e}")
@@ -112,6 +123,10 @@ def get_all_companies():
             con = get_db_connection()
             query = f"SELECT DISTINCT STD_EMPLOYER_NAME_PARENT FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE AND STD_EMPLOYER_NAME_PARENT IS NOT NULL ORDER BY STD_EMPLOYER_NAME_PARENT"
             companies = con.execute(query).fetchdf()['STD_EMPLOYER_NAME_PARENT'].tolist()
+            
+            # Cleanup after loading all companies
+            gc.collect()
+            
             return companies
         except Exception as e:
             st.error(f"Failed to load all companies: {e}")
@@ -124,6 +139,10 @@ def get_all_years():
             con = get_db_connection()
             query = f"SELECT DISTINCT YEAR FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE ORDER BY YEAR"
             years = con.execute(query).fetchdf()['YEAR'].tolist()
+            
+            # Cleanup after loading all years
+            gc.collect()
+            
             return years
         except Exception as e:
             st.error(f"Failed to load all years: {e}")
@@ -136,6 +155,10 @@ def get_all_states():
             con = get_db_connection()
             query = f"SELECT DISTINCT EMPLOYER_STATE FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE AND EMPLOYER_STATE IS NOT NULL ORDER BY EMPLOYER_STATE"
             states = con.execute(query).fetchdf()['EMPLOYER_STATE'].tolist()
+            
+            # Cleanup after loading all states
+            gc.collect()
+            
             return states
         except Exception as e:
             st.error(f"Failed to load all states: {e}")
@@ -148,6 +171,10 @@ def get_all_soc_titles():
             con = get_db_connection()
             query = f"SELECT DISTINCT aggressive_normalized_soc_title FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE AND aggressive_normalized_soc_title IS NOT NULL ORDER BY aggressive_normalized_soc_title"
             soc_titles = con.execute(query).fetchdf()['aggressive_normalized_soc_title'].tolist()
+            
+            # Cleanup after loading all SOC titles
+            gc.collect()
+            
             return soc_titles
         except Exception as e:
             st.error(f"Failed to load all SOC titles: {e}")

@@ -157,24 +157,28 @@ TABLE = 'job_market_data_aggressive_normalized'
 # FILTER FUNCTIONS (Independent from main app)
 # ============================================================================
 
-@st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
 def get_trends_filter_options():
-    """Get filter options for trends analysis"""
+    """Get filter options for trends analysis - lightweight version"""
     with st.spinner("Loading filter options..."):
         try:
             con = get_db_connection()
             if con is None:
                 return [], [], []
             
-            companies = con.execute(f"SELECT DISTINCT STD_EMPLOYER_NAME_PARENT FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE AND STD_EMPLOYER_NAME_PARENT != '' ORDER BY STD_EMPLOYER_NAME_PARENT").fetchdf()['STD_EMPLOYER_NAME_PARENT'].tolist()
+            # Load only top companies and categories for lightweight operation
+            companies = con.execute(f"SELECT DISTINCT STD_EMPLOYER_NAME_PARENT FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE AND STD_EMPLOYER_NAME_PARENT != '' ORDER BY STD_EMPLOYER_NAME_PARENT LIMIT 50").fetchdf()['STD_EMPLOYER_NAME_PARENT'].tolist()
             states = con.execute(f"SELECT DISTINCT EMPLOYER_STATE FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE AND EMPLOYER_STATE IS NOT NULL ORDER BY EMPLOYER_STATE").fetchdf()['EMPLOYER_STATE'].tolist()
-            soc_titles = con.execute(f"SELECT DISTINCT aggressive_normalized_soc_title FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE AND aggressive_normalized_soc_title IS NOT NULL ORDER BY aggressive_normalized_soc_title").fetchdf()['aggressive_normalized_soc_title'].tolist()
+            soc_titles = con.execute(f"SELECT DISTINCT aggressive_normalized_soc_title FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE AND aggressive_normalized_soc_title IS NOT NULL ORDER BY aggressive_normalized_soc_title LIMIT 30").fetchdf()['aggressive_normalized_soc_title'].tolist()
+            
+            # Force cleanup
+            import gc
+            gc.collect()
+            
             return companies, states, soc_titles
         except Exception as e:
             st.error(f"Failed to load filter options: {e}")
             return [], [], []
 
-@st.cache_data(ttl=1800, show_spinner=False)  # Cache for 30 minutes
 def get_trends_cities(state, company, soc_title):
     """Get cities for trends analysis filters"""
     with st.spinner("Loading cities..."):
@@ -201,90 +205,139 @@ def get_trends_cities(state, company, soc_title):
             st.error(f"Failed to load cities: {e}")
             return []
 
-@st.cache_data(ttl=900, show_spinner=False)  # Cache for 15 minutes
 def get_trends_filtered_data(company, state, soc_title, year_range, international_students_only=True):
-    """Get filtered data for trends analysis"""
-    with st.spinner("Loading trends data..."):
+    """Get aggregated data for trends analysis - SQL does the heavy lifting"""
+    with st.spinner("Loading aggregated trends data..."):
         try:
             con = get_db_connection()
             if con is None:
                 return pd.DataFrame()
             
-            query = f"SELECT * FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE AND YEAR BETWEEN ? AND ? AND LOWER(aggressive_normalized_soc_title) NOT LIKE '%other%'"
-            params = [year_range[0], year_range[1]]
-            
-            if company and company != 'All':
-                query += " AND STD_EMPLOYER_NAME_PARENT = ?"
-                params.append(company)
-            if state and state != 'All':
-                query += " AND EMPLOYER_STATE = ?"
-                params.append(state)
-            if soc_title and soc_title != 'All':
-                query += " AND aggressive_normalized_soc_title = ?"
-                params.append(soc_title)
-            
-            # Add wage level filter for international students
-            if international_students_only:
-                query += " AND PW_WAGE_LEVEL IN ('I', 'II')"
-            
-            df = con.execute(query, params).fetchdf()
-            return df
-        except Exception as e:
-            st.error(f"Error fetching trends data: {e}")
-            return pd.DataFrame()
-
-@st.cache_data(ttl=900, show_spinner=False)  # Cache for 15 minutes
-def get_trends_yearly_data(company, state, soc_title, year_range, international_students_only=True):
-    """Get yearly data for trends analysis (respects all filters EXCEPT year)"""
-    with st.spinner("Loading yearly trends data..."):
-        try:
-            con = get_db_connection()
-            if con is None:
-                return pd.DataFrame()
-            
-            query = f"SELECT * FROM {TABLE} WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE AND YEAR BETWEEN ? AND ? AND LOWER(aggressive_normalized_soc_title) NOT LIKE '%other%'"
-            params = [year_range[0], year_range[1]]
-            
-            if company and company != 'All':
-                query += " AND STD_EMPLOYER_NAME_PARENT = ?"
-                params.append(company)
-            if state and state != 'All':
-                query += " AND EMPLOYER_STATE = ?"
-                params.append(state)
-            if soc_title and soc_title != 'All':
-                query += " AND aggressive_normalized_soc_title = ?"
-                params.append(soc_title)
-            
-            # Add wage level filter for international students
-            if international_students_only:
-                query += " AND PW_WAGE_LEVEL IN ('I', 'II')"
-            
-            query += " ORDER BY YEAR"
-            df = con.execute(query, params).fetchdf()
-            return df
-        except Exception as e:
-            st.error(f"Error fetching yearly trends data: {e}")
-            return pd.DataFrame()
-
-@st.cache_data(ttl=900, show_spinner=False)  # Cache for 15 minutes
-def get_ai_career_data(company, state, year_range, international_students_only=True):
-    """Get AI career data including Data Scientists, Research Scientists, and AI Software Developers"""
-    with st.spinner("Loading AI career data..."):
-        try:
-            con = get_db_connection()
-            if con is None:
-                return pd.DataFrame()
-            
-            # Query for AI categories and AI Software Developers
+            # Build aggregated query - SQL does all the work
             query = f"""
-            SELECT *, 
-                   CASE 
-                       WHEN aggressive_normalized_soc_title IN ('Data Scientists', 'Computer and Information Research Scientists') 
-                       OR (aggressive_normalized_soc_title = 'Software Developers' 
-                       AND (JOB_TITLE LIKE '%Machine Learning%' OR JOB_TITLE LIKE '%AI%' OR JOB_TITLE LIKE '%ML%' OR JOB_TITLE LIKE '%Data Science%'))
-                       THEN 'AI Developers'
-                       ELSE aggressive_normalized_soc_title
-                   END as career_category
+            SELECT 
+                YEAR,
+                aggressive_normalized_soc_title,
+                COUNT(*) as petition_count,
+                AVG(PREVAILING_WAGE) as avg_salary,
+                MIN(PREVAILING_WAGE) as min_salary,
+                MAX(PREVAILING_WAGE) as max_salary,
+                COUNT(CASE WHEN PW_WAGE_LEVEL = 'I' THEN 1 END) as level1_count,
+                COUNT(CASE WHEN PW_WAGE_LEVEL = 'II' THEN 1 END) as level2_count,
+                COUNT(CASE WHEN PW_WAGE_LEVEL = 'III' THEN 1 END) as level3_count,
+                COUNT(CASE WHEN PW_WAGE_LEVEL = 'IV' THEN 1 END) as level4_count
+            FROM {TABLE} 
+            WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE 
+            AND YEAR BETWEEN ? AND ? AND LOWER(aggressive_normalized_soc_title) NOT LIKE '%other%'
+            """
+            params = [year_range[0], year_range[1]]
+            
+            if company and company != 'All':
+                query += " AND STD_EMPLOYER_NAME_PARENT = ?"
+                params.append(company)
+            if state and state != 'All':
+                query += " AND EMPLOYER_STATE = ?"
+                params.append(state)
+            if soc_title and soc_title != 'All':
+                query += " AND aggressive_normalized_soc_title = ?"
+                params.append(soc_title)
+            
+            # Add wage level filter for international students
+            if international_students_only:
+                query += " AND PW_WAGE_LEVEL IN ('I', 'II')"
+            
+            # Group by year and category - SQL does the aggregation
+            query += " GROUP BY YEAR, aggressive_normalized_soc_title ORDER BY YEAR, petition_count DESC"
+            
+            df = con.execute(query, params).fetchdf()
+            
+            # Force cleanup
+            import gc
+            gc.collect()
+            
+            return df
+        except Exception as e:
+            st.error(f"Error fetching aggregated trends data: {e}")
+            return pd.DataFrame()
+
+def get_trends_yearly_data(company, state, soc_title, year_range, international_students_only=True):
+    """Get aggregated yearly data for trends analysis - SQL does the heavy lifting"""
+    with st.spinner("Loading aggregated yearly trends data..."):
+        try:
+            con = get_db_connection()
+            if con is None:
+                return pd.DataFrame()
+            
+            # Build aggregated query - SQL does all the work
+            query = f"""
+            SELECT 
+                YEAR,
+                aggressive_normalized_soc_title,
+                COUNT(*) as petition_count,
+                AVG(PREVAILING_WAGE) as avg_salary,
+                MIN(PREVAILING_WAGE) as min_salary,
+                MAX(PREVAILING_WAGE) as max_salary,
+                COUNT(CASE WHEN PW_WAGE_LEVEL = 'I' THEN 1 END) as level1_count,
+                COUNT(CASE WHEN PW_WAGE_LEVEL = 'II' THEN 1 END) as level2_count,
+                COUNT(CASE WHEN PW_WAGE_LEVEL = 'III' THEN 1 END) as level3_count,
+                COUNT(CASE WHEN PW_WAGE_LEVEL = 'IV' THEN 1 END) as level4_count
+            FROM {TABLE} 
+            WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE 
+            AND YEAR BETWEEN ? AND ? AND LOWER(aggressive_normalized_soc_title) NOT LIKE '%other%'
+            """
+            params = [year_range[0], year_range[1]]
+            
+            if company and company != 'All':
+                query += " AND STD_EMPLOYER_NAME_PARENT = ?"
+                params.append(company)
+            if state and state != 'All':
+                query += " AND EMPLOYER_STATE = ?"
+                params.append(state)
+            if soc_title and soc_title != 'All':
+                query += " AND aggressive_normalized_soc_title = ?"
+                params.append(soc_title)
+            
+            # Add wage level filter for international students
+            if international_students_only:
+                query += " AND PW_WAGE_LEVEL IN ('I', 'II')"
+            
+            # Group by year and category - SQL does the aggregation
+            query += " GROUP BY YEAR, aggressive_normalized_soc_title ORDER BY YEAR, petition_count DESC"
+            
+            df = con.execute(query, params).fetchdf()
+            
+            # Force cleanup
+            import gc
+            gc.collect()
+            
+            return df
+        except Exception as e:
+            st.error(f"Error fetching aggregated yearly trends data: {e}")
+            return pd.DataFrame()
+
+def get_ai_career_data(company, state, year_range, international_students_only=True):
+    """Get aggregated AI career data - SQL does the heavy lifting"""
+    with st.spinner("Loading aggregated AI career data..."):
+        try:
+            con = get_db_connection()
+            if con is None:
+                return pd.DataFrame()
+            
+            # Build aggregated query for AI categories - SQL does all the work
+            query = f"""
+            SELECT 
+                YEAR,
+                CASE 
+                    WHEN aggressive_normalized_soc_title IN ('Data Scientists', 'Computer and Information Research Scientists') 
+                    OR (aggressive_normalized_soc_title = 'Software Developers' 
+                    AND (JOB_TITLE LIKE '%Machine Learning%' OR JOB_TITLE LIKE '%AI%' OR JOB_TITLE LIKE '%ML%' OR JOB_TITLE LIKE '%Data Science%'))
+                    THEN 'AI Developers'
+                    ELSE aggressive_normalized_soc_title
+                END as career_category,
+                COUNT(*) as petition_count,
+                AVG(PREVAILING_WAGE) as avg_salary,
+                MIN(PREVAILING_WAGE) as min_salary,
+                MAX(PREVAILING_WAGE) as max_salary
             FROM {TABLE} 
             WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE 
             AND YEAR BETWEEN ? AND ? AND LOWER(aggressive_normalized_soc_title) NOT LIKE '%other%'
@@ -302,25 +355,40 @@ def get_ai_career_data(company, state, year_range, international_students_only=T
             if international_students_only:
                 query += " AND PW_WAGE_LEVEL IN ('I', 'II')"
             
-            query += " ORDER BY YEAR"
+            # Group by year and career category - SQL does the aggregation
+            query += " GROUP BY YEAR, career_category ORDER BY YEAR, petition_count DESC"
+            
             df = con.execute(query, params).fetchdf()
+            
+            # Force cleanup
+            import gc
+            gc.collect()
+            
             return df
         except Exception as e:
-            st.error(f"Error fetching AI career data: {e}")
+            st.error(f"Error fetching aggregated AI career data: {e}")
             return pd.DataFrame()
 
-@st.cache_data(ttl=900, show_spinner=False)  # Cache for 15 minutes
 def get_career_growth_decline_data(company, state, year_range, international_students_only=True):
-    """Get career growth and decline data for top categories"""
+    """Get detailed career growth and decline data for proper trend analysis"""
     with st.spinner("Loading career growth/decline data..."):
         try:
             con = get_db_connection()
             if con is None:
                 return pd.DataFrame()
             
-            # Get all career categories with yearly counts
+            # Get detailed data for growth analysis - need year-by-year data
             query = f"""
-            SELECT aggressive_normalized_soc_title, YEAR, COUNT(*) as count
+            SELECT 
+                YEAR,
+                CASE 
+                    WHEN aggressive_normalized_soc_title IN ('Data Scientists', 'Computer and Information Research Scientists') 
+                    OR (aggressive_normalized_soc_title = 'Software Developers' 
+                    AND (JOB_TITLE LIKE '%Machine Learning%' OR JOB_TITLE LIKE '%AI%' OR JOB_TITLE LIKE '%ML%' OR JOB_TITLE LIKE '%Data Science%'))
+                    THEN 'AI Developers'
+                    ELSE aggressive_normalized_soc_title
+                END as career_category,
+                COUNT(*) as petition_count
             FROM {TABLE} 
             WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE 
             AND YEAR BETWEEN ? AND ? AND LOWER(aggressive_normalized_soc_title) NOT LIKE '%other%'
@@ -338,11 +406,177 @@ def get_career_growth_decline_data(company, state, year_range, international_stu
             if international_students_only:
                 query += " AND PW_WAGE_LEVEL IN ('I', 'II')"
             
-            query += " GROUP BY aggressive_normalized_soc_title, YEAR ORDER BY aggressive_normalized_soc_title, YEAR"
+            # Group by year and career category for growth analysis
+            query += " GROUP BY YEAR, career_category ORDER BY YEAR, petition_count DESC"
+            
             df = con.execute(query, params).fetchdf()
+            
+            # Force cleanup
+            import gc
+            gc.collect()
+            
             return df
         except Exception as e:
             st.error(f"Error fetching career growth/decline data: {e}")
+            return pd.DataFrame()
+
+# Specific functions for each visualization - SQL does the heavy lifting
+def get_top_companies_data(company, state, soc_title, year_range, international_students_only=True):
+    """Get top companies data for visualization - SQL does the heavy lifting"""
+    with st.spinner("Loading top companies data..."):
+        try:
+            con = get_db_connection()
+            if con is None:
+                return pd.DataFrame()
+            
+            # Build aggregated query for top companies - SQL does all the work
+            query = f"""
+            SELECT 
+                STD_EMPLOYER_NAME_PARENT as company,
+                COUNT(*) as petition_count,
+                AVG(PREVAILING_WAGE) as avg_salary,
+                MIN(PREVAILING_WAGE) as min_salary,
+                MAX(PREVAILING_WAGE) as max_salary,
+                COUNT(CASE WHEN PW_WAGE_LEVEL = 'I' THEN 1 END) as level1_count,
+                COUNT(CASE WHEN PW_WAGE_LEVEL = 'II' THEN 1 END) as level2_count
+            FROM {TABLE} 
+            WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE 
+            AND YEAR BETWEEN ? AND ? AND LOWER(aggressive_normalized_soc_title) NOT LIKE '%other%'
+            """
+            params = [year_range[0], year_range[1]]
+            
+            if company and company != 'All':
+                query += " AND STD_EMPLOYER_NAME_PARENT = ?"
+                params.append(company)
+            if state and state != 'All':
+                query += " AND EMPLOYER_STATE = ?"
+                params.append(state)
+            if soc_title and soc_title != 'All':
+                query += " AND aggressive_normalized_soc_title = ?"
+                params.append(soc_title)
+            
+            # Add wage level filter for international students
+            if international_students_only:
+                query += " AND PW_WAGE_LEVEL IN ('I', 'II')"
+            
+            # Group by company - SQL does the aggregation
+            query += " GROUP BY STD_EMPLOYER_NAME_PARENT ORDER BY petition_count DESC"
+            
+            df = con.execute(query, params).fetchdf()
+            
+            # Force cleanup
+            import gc
+            gc.collect()
+            
+            return df
+        except Exception as e:
+            st.error(f"Error fetching top companies data: {e}")
+            return pd.DataFrame()
+
+def get_top_states_data(company, soc_title, year_range, international_students_only=True):
+    """Get top states data for visualization - SQL does the heavy lifting"""
+    with st.spinner("Loading top states data..."):
+        try:
+            con = get_db_connection()
+            if con is None:
+                return pd.DataFrame()
+            
+            # Build aggregated query for top states - SQL does all the work
+            query = f"""
+            SELECT 
+                EMPLOYER_STATE as state,
+                COUNT(*) as petition_count,
+                AVG(PREVAILING_WAGE) as avg_salary,
+                MIN(PREVAILING_WAGE) as min_salary,
+                MAX(PREVAILING_WAGE) as max_salary,
+                COUNT(CASE WHEN PW_WAGE_LEVEL = 'I' THEN 1 END) as level1_count,
+                COUNT(CASE WHEN PW_WAGE_LEVEL = 'II' THEN 1 END) as level2_count
+            FROM {TABLE} 
+            WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE 
+            AND YEAR BETWEEN ? AND ? AND LOWER(aggressive_normalized_soc_title) NOT LIKE '%other%'
+            """
+            params = [year_range[0], year_range[1]]
+            
+            if company and company != 'All':
+                query += " AND STD_EMPLOYER_NAME_PARENT = ?"
+                params.append(company)
+            if soc_title and soc_title != 'All':
+                query += " AND aggressive_normalized_soc_title = ?"
+                params.append(soc_title)
+            
+            # Add wage level filter for international students
+            if international_students_only:
+                query += " AND PW_WAGE_LEVEL IN ('I', 'II')"
+            
+            # Group by state - SQL does the aggregation
+            query += " GROUP BY EMPLOYER_STATE ORDER BY petition_count DESC"
+            
+            df = con.execute(query, params).fetchdf()
+            
+            # Force cleanup
+            import gc
+            gc.collect()
+            
+            return df
+        except Exception as e:
+            st.error(f"Error fetching top states data: {e}")
+            return pd.DataFrame()
+
+def get_salary_insights_data(company, state, soc_title, year_range, international_students_only=True):
+    """Get salary insights data for visualization - SQL does the heavy lifting"""
+    with st.spinner("Loading salary insights data..."):
+        try:
+            con = get_db_connection()
+            if con is None:
+                return pd.DataFrame()
+            
+            # Build aggregated query for salary insights - SQL does all the work
+            query = f"""
+            SELECT 
+                aggressive_normalized_soc_title,
+                COUNT(*) as petition_count,
+                AVG(PREVAILING_WAGE) as avg_salary,
+                MIN(PREVAILING_WAGE) as min_salary,
+                MAX(PREVAILING_WAGE) as max_salary,
+                PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY PREVAILING_WAGE) as p25_salary,
+                PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY PREVAILING_WAGE) as median_salary,
+                PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY PREVAILING_WAGE) as p75_salary,
+                COUNT(CASE WHEN PW_WAGE_LEVEL = 'I' THEN 1 END) as level1_count,
+                COUNT(CASE WHEN PW_WAGE_LEVEL = 'II' THEN 1 END) as level2_count,
+                COUNT(CASE WHEN PW_WAGE_LEVEL = 'III' THEN 1 END) as level3_count,
+                COUNT(CASE WHEN PW_WAGE_LEVEL = 'IV' THEN 1 END) as level4_count
+            FROM {TABLE} 
+            WHERE VISA_CLASS = 'H-1B' AND is_lottery_petition = TRUE 
+            AND YEAR BETWEEN ? AND ? AND LOWER(aggressive_normalized_soc_title) NOT LIKE '%other%'
+            """
+            params = [year_range[0], year_range[1]]
+            
+            if company and company != 'All':
+                query += " AND STD_EMPLOYER_NAME_PARENT = ?"
+                params.append(company)
+            if state and state != 'All':
+                query += " AND EMPLOYER_STATE = ?"
+                params.append(state)
+            if soc_title and soc_title != 'All':
+                query += " AND aggressive_normalized_soc_title = ?"
+                params.append(soc_title)
+            
+            # Add wage level filter for international students
+            if international_students_only:
+                query += " AND PW_WAGE_LEVEL IN ('I', 'II')"
+            
+            # Group by category - SQL does the aggregation
+            query += " GROUP BY aggressive_normalized_soc_title ORDER BY avg_salary DESC"
+            
+            df = con.execute(query, params).fetchdf()
+            
+            # Force cleanup
+            import gc
+            gc.collect()
+            
+            return df
+        except Exception as e:
+            st.error(f"Error fetching salary insights data: {e}")
             return pd.DataFrame()
 
 # ============================================================================
@@ -490,29 +724,31 @@ with trends_tab1:
                     chart_title = "Entry-Level H-1B Opportunities (Level I & II)"
                 else:
                     st.markdown("**Job Opportunities by Year**")
-                    chart_title = "H-1B Job Opportunities by Wage Level"
+                    chart_title = "H-1B Job Opportunities by Year"
                 
-                entry_counts = entry_level_df.groupby(['YEAR', 'PW_WAGE_LEVEL']).size().reset_index(name='count')
+                # Use aggregated data - SQL already did the work
+                entry_counts = entry_level_df.groupby('YEAR')['petition_count'].sum().reset_index()
                 
-                fig_entry_counts = px.line(entry_counts, x='YEAR', y='count', color='PW_WAGE_LEVEL',
+                fig_entry_counts = px.line(entry_counts, x='YEAR', y='petition_count',
                                          title=chart_title,
-                                         labels={'count': 'Number of Petitions', 'YEAR': 'Year', 'PW_WAGE_LEVEL': 'Wage Level'})
+                                         labels={'petition_count': 'Number of Petitions', 'YEAR': 'Year'})
                 fig_entry_counts.update_layout(height=400)
                 st.plotly_chart(fig_entry_counts, use_container_width=True)
             
             with col2:
                 if international_students_only:
                     st.markdown("**Entry-Level Salary Trends**")
-                    chart_title = "Entry-Level Salary Trends by Wage Level"
+                    chart_title = "Entry-Level Salary Trends by Year"
                 else:
-                    st.markdown("**Salary Trends by Experience Level**")
-                    chart_title = "Salary Trends by Wage Level"
+                    st.markdown("**Salary Trends by Year**")
+                    chart_title = "Salary Trends by Year"
                 
-                entry_salary_trends = entry_level_df.groupby(['YEAR', 'PW_WAGE_LEVEL'])['PREVAILING_WAGE'].mean().reset_index()
+                # Use aggregated data - SQL already calculated averages
+                entry_salary_trends = entry_level_df.groupby('YEAR')['avg_salary'].mean().reset_index()
                 
-                fig_entry_salary = px.line(entry_salary_trends, x='YEAR', y='PREVAILING_WAGE', color='PW_WAGE_LEVEL',
+                fig_entry_salary = px.line(entry_salary_trends, x='YEAR', y='avg_salary',
                                          title=chart_title,
-                                         labels={'PREVAILING_WAGE': 'Average Salary ($)', 'YEAR': 'Year', 'PW_WAGE_LEVEL': 'Wage Level'})
+                                         labels={'avg_salary': 'Average Salary ($)', 'YEAR': 'Year'})
                 fig_entry_salary.update_layout(height=400)
                 st.plotly_chart(fig_entry_salary, use_container_width=True)
             
@@ -542,12 +778,24 @@ with trends_tab1:
                 - **Strategy:** Focus on companies that align with your experience level
                 """
             
-            entry_stats = entry_level_df.groupby('PW_WAGE_LEVEL').agg({
-                'PW_WAGE_LEVEL': 'count',
-                'PREVAILING_WAGE': ['mean', 'median', 'min', 'max']
+            # Use aggregated data - SQL already calculated the statistics
+            entry_stats = entry_level_df.agg({
+                'petition_count': 'sum',
+                'avg_salary': 'mean',
+                'min_salary': 'min',
+                'max_salary': 'max'
             }).round(0)
-            entry_stats.columns = ['Total Petitions', 'Avg Salary', 'Median Salary', 'Min Salary', 'Max Salary']
-            st.dataframe(entry_stats, use_container_width=True)
+            
+            # Create a simple stats display
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Petitions", f"{int(entry_stats['petition_count']):,}")
+            with col2:
+                st.metric("Avg Salary", f"${int(entry_stats['avg_salary']):,}")
+            with col3:
+                st.metric("Min Salary", f"${int(entry_stats['min_salary']):,}")
+            with col4:
+                st.metric("Max Salary", f"${int(entry_stats['max_salary']):,}")
             
             # Key insights
             st.markdown(f"**{insights_title}**")
@@ -566,41 +814,37 @@ with trends_tab2:
         st.markdown('<div class="info-box">💡 <strong>Key Insight:</strong> These companies hire the most H-1B workers across all experience levels. Focus your job search on companies with high hiring rates.</div>', unsafe_allow_html=True)
     
     if not df.empty:
-        # Focus on companies that hire entry-level positions
-        entry_level_companies = df[df['PW_WAGE_LEVEL'].isin(['I', 'II'])]
+        # Use the specific top companies function for aggregated data
+        top_companies_df = get_top_companies_data(company, state, soc_title, year_range, international_students_only)
         
-        if not entry_level_companies.empty:
-            top_entry_companies = entry_level_companies['STD_EMPLOYER_NAME_PARENT'].value_counts().head(20)
+        if not top_companies_df.empty:
+            # Filter to top 15 companies for visualization
+            top_companies_df = top_companies_df.head(15)
             
             # Enhanced Top Employers Visualization
             col1, col2 = st.columns(2)
             
             with col1:
                 st.markdown("**🏆 Top Companies by Hiring Volume**")
-                # Create a more appealing visualization with bubbles
-                top_companies_df = pd.DataFrame({
-                    'Company': top_entry_companies.index,
-                    'Petitions': top_entry_companies.values
-                })
-                fig_top_companies = px.scatter(top_companies_df, x='Petitions', y='Company', 
-                                             size='Petitions', color='Petitions',
-                                             title="Top Companies by Entry-Level Hiring Volume",
-                                             labels={'Petitions': 'Number of Petitions', 'Company': 'Company'},
+                # Use aggregated data - SQL already calculated the counts
+                fig_top_companies = px.scatter(top_companies_df, x='petition_count', y='company', 
+                                             size='petition_count', color='avg_salary',
+                                             title="Top Companies by Hiring Volume",
+                                             labels={'petition_count': 'Number of Petitions', 'company': 'Company Name', 'avg_salary': 'Avg Salary'},
                                              color_continuous_scale='viridis')
                 fig_top_companies.update_layout(height=500, showlegend=False)
                 st.plotly_chart(fig_top_companies, use_container_width=True)
             
             with col2:
                 st.markdown("**💰 Best Paying Companies**")
-                entry_salary = entry_level_companies.groupby('STD_EMPLOYER_NAME_PARENT')['PREVAILING_WAGE'].agg(['mean', 'count']).reset_index()
-                entry_salary = entry_salary[entry_salary['count'] >= 100]  # Only companies with 100+ entry-level petitions
-                top_salary_companies = entry_salary.nlargest(20, 'mean')
+                # Filter to companies with 100+ petitions and use aggregated data
+                best_paying_df = top_companies_df[top_companies_df['petition_count'] >= 100].nlargest(15, 'avg_salary')
                 
                 # Create a more appealing salary visualization
-                fig_salary_companies = px.scatter(top_salary_companies, x='mean', y='STD_EMPLOYER_NAME_PARENT',
-                                                size='count', color='mean',
+                fig_salary_companies = px.scatter(best_paying_df, x='avg_salary', y='company',
+                                                size='petition_count', color='avg_salary',
                                                 title="Best Paying Companies (100+ petitions)",
-                                                labels={'mean': 'Average Salary ($)', 'STD_EMPLOYER_NAME_PARENT': 'Company', 'count': 'Number of Petitions'},
+                                                labels={'avg_salary': 'Average Salary ($)', 'company': 'Company Name', 'petition_count': 'Number of Petitions'},
                                                 color_continuous_scale='plasma')
                 fig_salary_companies.update_layout(height=500, showlegend=False)
                 st.plotly_chart(fig_salary_companies, use_container_width=True)
@@ -754,14 +998,17 @@ with trends_tab2:
                 # Small Companies (based on petition count - will be handled in visualization)
                 return 'Other Industries'
             
-            entry_level_companies['Company_Type'] = entry_level_companies['STD_EMPLOYER_NAME_PARENT'].apply(categorize_company_for_students)
+            # Apply company categorization to aggregated data
+            top_companies_df['Company_Type'] = top_companies_df['company'].apply(categorize_company_for_students)
             
-            # Enhanced company type analysis with better visualization
-            company_type_summary = entry_level_companies.groupby('Company_Type').agg({
-                'PW_WAGE_LEVEL': 'count',
-                'PREVAILING_WAGE': ['mean', 'median']
+            # Enhanced company type analysis with aggregated data
+            company_type_summary = top_companies_df.groupby('Company_Type').agg({
+                'petition_count': 'sum',
+                'avg_salary': 'mean',
+                'min_salary': 'min',
+                'max_salary': 'max'
             }).round(0)
-            company_type_summary.columns = ['Total Petitions', 'Avg Salary', 'Median Salary']
+            company_type_summary.columns = ['Total Petitions', 'Avg Salary', 'Min Salary', 'Max Salary']
             company_type_summary = company_type_summary.sort_values('Total Petitions', ascending=False)
             
             # Filter to show only significant company types (10+ petitions)
@@ -786,7 +1033,7 @@ with trends_tab2:
                                               title="Salary vs Hiring Volume by Company Type",
                                               labels={'Total Petitions': 'Number of Petitions', 'Avg Salary': 'Average Salary ($)'},
                                               color_continuous_scale='plasma',
-                                              hover_data=['Company_Type', 'Median Salary'])
+                                              hover_data=['Company_Type', 'Min Salary', 'Max Salary'])
                 fig_company_salary.update_layout(height=500)
                 st.plotly_chart(fig_company_salary, use_container_width=True)
             
@@ -794,17 +1041,12 @@ with trends_tab2:
             st.markdown("**📊 Company Type Statistics**")
             st.dataframe(significant_types, use_container_width=True)
             
-            # Student-focused company summary
+            # Student-focused company summary using aggregated data
             st.markdown("**🎯 Top Companies for International Students**")
-            student_company_summary = entry_level_companies.groupby('STD_EMPLOYER_NAME_PARENT').agg({
-                'PW_WAGE_LEVEL': 'count',
-                'PREVAILING_WAGE': ['mean', 'median']
-            }).round(2)
-            # Calculate % Level I separately
-            level_i_percentage = entry_level_companies.groupby('STD_EMPLOYER_NAME_PARENT')['PW_WAGE_LEVEL'].apply(lambda x: (x == 'I').sum() / len(x) * 100).round(2)
-            student_company_summary['% Level I'] = level_i_percentage
-            student_company_summary.columns = ['Entry-Level Petitions', 'Avg Salary', 'Median Salary', '% Level I']
-            student_company_summary = student_company_summary[student_company_summary['Entry-Level Petitions'] >= 5].sort_values('Entry-Level Petitions', ascending=False)
+            student_company_summary = top_companies_df[top_companies_df['petition_count'] >= 5].copy()
+            student_company_summary['% Level I'] = (student_company_summary['level1_count'] / student_company_summary['petition_count'] * 100).round(2)
+            student_company_summary = student_company_summary[['company', 'petition_count', 'avg_salary', 'min_salary', 'max_salary', '% Level I']].sort_values('petition_count', ascending=False)
+            student_company_summary.columns = ['Company', 'Entry-Level Petitions', 'Avg Salary', 'Min Salary', 'Max Salary', '% Level I']
             st.dataframe(student_company_summary.head(20), use_container_width=True)
             
             # Key insights for students
@@ -830,72 +1072,55 @@ with trends_tab3:
         st.markdown('<div class="info-box">💡 <strong>Key Insight:</strong> Some states and cities have more opportunities for H-1B workers. Understanding geographic trends helps you decide where to focus your job search and potentially relocate.</div>', unsafe_allow_html=True)
     
     if not df.empty:
-        # Focus on entry-level opportunities by location
-        entry_level_states = df[df['PW_WAGE_LEVEL'].isin(['I', 'II'])]
+        # Use the specific top states function for aggregated data
+        top_states_df = get_top_states_data(company, soc_title, year_range, international_students_only)
         
-        if not entry_level_states.empty:
+        if not top_states_df.empty:
             # Enhanced Geographic Visualizations
             col1, col2 = st.columns(2)
             
             with col1:
                 st.markdown("**🗺️ Top States by Opportunity Volume**")
-                top_entry_states = entry_level_states['EMPLOYER_STATE'].value_counts().head(15)
-                # Create a more appealing state visualization
-                states_df = pd.DataFrame({
-                    'State': top_entry_states.index,
-                    'Petitions': top_entry_states.values
-                })
-                fig_top_states = px.scatter(states_df, x='Petitions', y='State', 
-                                          size='Petitions', color='Petitions',
-                                          title="Top States by Entry-Level Hiring Volume",
-                                          labels={'Petitions': 'Number of Petitions', 'State': 'State'},
+                # Use aggregated data - SQL already calculated the counts
+                top_states_viz = top_states_df.head(15)
+                fig_top_states = px.scatter(top_states_viz, x='petition_count', y='state', 
+                                          size='petition_count', color='avg_salary',
+                                          title="Top States by Hiring Volume",
+                                          labels={'petition_count': 'Number of Petitions', 'state': 'State', 'avg_salary': 'Avg Salary'},
                                           color_continuous_scale='blues')
                 fig_top_states.update_layout(height=500, showlegend=False)
                 st.plotly_chart(fig_top_states, use_container_width=True)
             
             with col2:
                 st.markdown("**💰 Best Paying States**")
-                entry_state_salary = entry_level_states.groupby('EMPLOYER_STATE')['PREVAILING_WAGE'].agg(['mean', 'count']).reset_index()
-                entry_state_salary = entry_state_salary[entry_state_salary['count'] >= 20]  # Only states with 20+ entry-level petitions
-                top_salary_states = entry_state_salary.nlargest(15, 'mean')
+                # Filter to states with 100+ petitions and use aggregated data
+                best_paying_states = top_states_df[top_states_df['petition_count'] >= 100].nlargest(15, 'avg_salary')
                 
                 # Create a more appealing salary visualization
-                fig_salary_states = px.scatter(top_salary_states, x='mean', y='EMPLOYER_STATE',
-                                             size='count', color='mean',
-                                             title="Best Paying States (20+ petitions)",
-                                             labels={'mean': 'Average Salary ($)', 'EMPLOYER_STATE': 'State', 'count': 'Number of Petitions'},
+                fig_salary_states = px.scatter(best_paying_states, x='avg_salary', y='state',
+                                             size='petition_count', color='avg_salary',
+                                             title="Best Paying States (100+ petitions)",
+                                             labels={'avg_salary': 'Average Salary ($)', 'state': 'State', 'petition_count': 'Number of Petitions'},
                                              color_continuous_scale='plasma')
                 fig_salary_states.update_layout(height=500, showlegend=False)
                 st.plotly_chart(fig_salary_states, use_container_width=True)
             
-            # Enhanced Cities Visualization
+            # Enhanced Cities Visualization - Note: Cities data not available in aggregated format
             st.markdown("**🏙️ Top Cities by Opportunity Volume**")
-            top_entry_cities = entry_level_states['EMPLOYER_CITY'].value_counts().head(20)
+            st.info("City-level analysis requires detailed data. For aggregated analysis, focus on state-level trends above.")
             
-            # Create a more appealing city visualization
-            cities_df = pd.DataFrame({
-                'City': top_entry_cities.index,
-                'Petitions': top_entry_cities.values
-            })
-            fig_top_cities = px.scatter(cities_df, x='Petitions', y='City', 
-                                      size='Petitions', color='Petitions',
-                                      title="Top Cities by Entry-Level Hiring Volume",
-                                      labels={'Petitions': 'Number of Petitions', 'City': 'City'},
-                                      color_continuous_scale='greens')
-            fig_top_cities.update_layout(height=500, showlegend=False)
-            st.plotly_chart(fig_top_cities, use_container_width=True)
+            # Show top states instead
+            st.markdown("**📊 Top States Summary**")
+            top_states_summary = top_states_df.head(10)[['state', 'petition_count', 'avg_salary']]
+            top_states_summary.columns = ['State', 'Petitions', 'Avg Salary']
+            st.dataframe(top_states_summary, use_container_width=True)
             
-            # Geographic insights for students
+            # Geographic insights for students using aggregated data
             st.markdown("**🌍 Geographic Insights for International Students**")
-            geographic_summary = entry_level_states.groupby('EMPLOYER_STATE').agg({
-                'PW_WAGE_LEVEL': 'count',
-                'PREVAILING_WAGE': ['mean', 'median']
-            }).round(2)
-            # Calculate % Level I separately
-            level_i_percentage = entry_level_states.groupby('EMPLOYER_STATE')['PW_WAGE_LEVEL'].apply(lambda x: (x == 'I').sum() / len(x) * 100).round(2)
-            geographic_summary['% Level I'] = level_i_percentage
-            geographic_summary.columns = ['Entry-Level Petitions', 'Avg Salary', 'Median Salary', '% Level I']
-            geographic_summary = geographic_summary[geographic_summary['Entry-Level Petitions'] >= 20].sort_values('Entry-Level Petitions', ascending=False)
+            geographic_summary = top_states_df[top_states_df['petition_count'] >= 100].copy()
+            geographic_summary['% Level I'] = (geographic_summary['level1_count'] / geographic_summary['petition_count'] * 100).round(2)
+            geographic_summary = geographic_summary[['state', 'petition_count', 'avg_salary', 'min_salary', 'max_salary', '% Level I']].sort_values('petition_count', ascending=False)
+            geographic_summary.columns = ['State', 'Entry-Level Petitions', 'Avg Salary', 'Min Salary', 'Max Salary', '% Level I']
             st.dataframe(geographic_summary.head(15), use_container_width=True)
             
             # Key insights for students
@@ -929,18 +1154,15 @@ with trends_tab4:
         entry_level_careers = df
         
         if not entry_level_careers.empty:
-            # Combine regular career data with AI career data for entry-level analysis
-            entry_level_ai = ai_career_df[ai_career_df['PW_WAGE_LEVEL'].isin(['I', 'II'])]
-            
-            # Create combined entry-level career data
+            # Use aggregated data - AI career data is already filtered at SQL level
             combined_entry_careers = entry_level_careers.copy()
-            if not entry_level_ai.empty:
-                # Add AI career data to entry-level analysis
-                # Select only the columns that exist in both DataFrames
-                common_columns = list(set(entry_level_careers.columns) & set(entry_level_ai.columns))
-                entry_level_ai_subset = entry_level_ai[common_columns].copy()
-                entry_level_ai_subset['aggressive_normalized_soc_title'] = entry_level_ai['career_category']
-                combined_entry_careers = pd.concat([combined_entry_careers, entry_level_ai_subset], ignore_index=True)
+            
+            # Add AI career data if available (already aggregated)
+            if not ai_career_df.empty:
+                # AI data is already aggregated, just combine the career categories
+                ai_career_subset = ai_career_df[['YEAR', 'career_category', 'petition_count', 'avg_salary']].copy()
+                ai_career_subset = ai_career_subset.rename(columns={'career_category': 'aggressive_normalized_soc_title'})
+                combined_entry_careers = pd.concat([combined_entry_careers, ai_career_subset], ignore_index=True)
             
             # Career Path Growth & Salary Trends (Line Charts)
             col1, col2 = st.columns(2)
@@ -951,33 +1173,37 @@ with trends_tab4:
                 # Get top 10 career paths by total count (data already filtered at SQL level)
                 top_10_careers = combined_entry_careers['aggressive_normalized_soc_title'].value_counts().head(10).index.tolist()
                 
-                # Create growth trends data for top career paths
+                # Create growth trends data for top career paths using aggregated data
                 top_career_trends = combined_entry_careers[combined_entry_careers['aggressive_normalized_soc_title'].isin(top_10_careers)]
-                top_career_trends = top_career_trends.groupby(['YEAR', 'aggressive_normalized_soc_title']).size().reset_index(name='count')
+                # Use petition_count from aggregated data instead of size()
+                top_career_trends = top_career_trends.groupby(['YEAR', 'aggressive_normalized_soc_title'])['petition_count'].sum().reset_index()
                 
                 # Create line chart for top career paths growth
-                fig_top_careers = px.line(top_career_trends, x='YEAR', y='count', color='aggressive_normalized_soc_title',
+                fig_top_careers = px.line(top_career_trends, x='YEAR', y='petition_count', color='aggressive_normalized_soc_title',
                                         title="Top 10 Career Paths Growth Trends (2020-2024)",
-                                        labels={'count': 'Number of Entry-Level Petitions', 'YEAR': 'Year', 'aggressive_normalized_soc_title': 'Career Path'})
+                                        labels={'petition_count': 'Number of Entry-Level Petitions', 'YEAR': 'Year', 'aggressive_normalized_soc_title': 'Career Path'})
                 fig_top_careers.update_layout(height=400)
                 st.plotly_chart(fig_top_careers, use_container_width=True)
             
             with col2:
                 st.markdown("**💰 Best Paying Career Paths Salary Trends (2020-2024)**")
                 
-                # Get top 10 paying career paths (data already filtered at SQL level)
-                career_salary = combined_entry_careers.groupby('aggressive_normalized_soc_title')['PREVAILING_WAGE'].agg(['mean', 'count']).reset_index()
-                career_salary = career_salary[career_salary['count'] >= 10]  # Only career paths with 10+ entry-level petitions
-                top_10_paying_careers = career_salary.nlargest(10, 'mean')['aggressive_normalized_soc_title'].tolist()
+                # Get top 10 paying career paths using aggregated data
+                career_salary = combined_entry_careers.groupby('aggressive_normalized_soc_title').agg({
+                    'avg_salary': 'mean',
+                    'petition_count': 'sum'
+                }).reset_index()
+                career_salary = career_salary[career_salary['petition_count'] >= 10]  # Only career paths with 10+ entry-level petitions
+                top_10_paying_careers = career_salary.nlargest(10, 'avg_salary')['aggressive_normalized_soc_title'].tolist()
                 
-                # Create salary trends data for top paying careers
+                # Create salary trends data for top paying careers using aggregated data
                 top_paying_trends = combined_entry_careers[combined_entry_careers['aggressive_normalized_soc_title'].isin(top_10_paying_careers)]
-                top_paying_trends = top_paying_trends.groupby(['YEAR', 'aggressive_normalized_soc_title'])['PREVAILING_WAGE'].mean().reset_index()
+                top_paying_trends = top_paying_trends.groupby(['YEAR', 'aggressive_normalized_soc_title'])['avg_salary'].mean().reset_index()
                 
                 # Create line chart for salary trends
-                fig_salary_trends = px.line(top_paying_trends, x='YEAR', y='PREVAILING_WAGE', color='aggressive_normalized_soc_title',
+                fig_salary_trends = px.line(top_paying_trends, x='YEAR', y='avg_salary', color='aggressive_normalized_soc_title',
                                           title="Top 10 Paying Career Paths Salary Trends (2020-2024)",
-                                          labels={'PREVAILING_WAGE': 'Average Salary ($)', 'YEAR': 'Year', 'aggressive_normalized_soc_title': 'Career Path'})
+                                          labels={'avg_salary': 'Average Salary ($)', 'YEAR': 'Year', 'aggressive_normalized_soc_title': 'Career Path'})
                 fig_salary_trends.update_layout(height=400)
                 st.plotly_chart(fig_salary_trends, use_container_width=True)
             
@@ -987,72 +1213,84 @@ with trends_tab4:
             if not career_growth_df.empty:
                 st.markdown("**📈 Career Path Growth Trends (2020-2024) - Top 10 Growing**")
                 
-                # Data already filtered at SQL level, no need for manual filtering
-                combined_career_data = career_growth_df.copy()
-                
-                # Add AI career data to the growth analysis
-                if not ai_career_df.empty:
-                    ai_career_trends = ai_career_df.groupby(['YEAR', 'career_category']).size().reset_index(name='count')
-                    ai_career_trends = ai_career_trends.rename(columns={'career_category': 'aggressive_normalized_soc_title'})
-                    combined_career_data = pd.concat([combined_career_data, ai_career_trends], ignore_index=True)
-                
-                # Calculate growth rates for each career path
+                # Calculate growth rates for each career path using year-by-year data
                 career_growth_rates = []
-                for career in combined_career_data['aggressive_normalized_soc_title'].unique():
-                    career_data = combined_career_data[combined_career_data['aggressive_normalized_soc_title'] == career]
+                for career in career_growth_df['career_category'].unique():
+                    career_data = career_growth_df[career_growth_df['career_category'] == career]
                     if len(career_data) >= 2:  # Need at least 2 years of data
-                        start_count = career_data.iloc[0]['count']
-                        end_count = career_data.iloc[-1]['count']
+                        # Sort by year to get start and end
+                        career_data = career_data.sort_values('YEAR')
+                        start_count = career_data.iloc[0]['petition_count']
+                        end_count = career_data.iloc[-1]['petition_count']
                         if start_count > 0:
                             growth_rate = ((end_count - start_count) / start_count) * 100
                             career_growth_rates.append({
                                 'career': career,
                                 'growth_rate': growth_rate,
                                 'start_count': start_count,
-                                'end_count': end_count
+                                'end_count': end_count,
+                                'total_petitions': career_data['petition_count'].sum()
                             })
                 
-                # Sort by growth rate
+                # Sort by growth rate and filter for meaningful careers (at least 50 total petitions)
                 growth_df = pd.DataFrame(career_growth_rates)
-                top_growing = growth_df.nlargest(10, 'growth_rate')
-                top_declining = growth_df.nsmallest(10, 'growth_rate')
+                if not growth_df.empty:
+                    growth_df = growth_df[growth_df['total_petitions'] >= 50]  # Only careers with meaningful volume
+                    top_growing = growth_df.nlargest(10, 'growth_rate')
+                    top_declining = growth_df.nsmallest(10, 'growth_rate')
                 
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.markdown("**🚀 Top 10 Growing Careers**")
-                    fig_growing = px.bar(top_growing, x='growth_rate', y='career', orientation='h',
-                                       title="Top 10 Growing Career Paths (2020-2024)",
-                                       labels={'growth_rate': 'Growth Rate (%)', 'career': 'Career Path'})
-                    fig_growing.update_layout(height=400)
-                    st.plotly_chart(fig_growing, use_container_width=True)
-                
-                with col2:
-                    st.markdown("**📉 Top 10 Declining Careers**")
-                    fig_declining = px.bar(top_declining, x='growth_rate', y='career', orientation='h',
-                                         title="Top 10 Declining Career Paths (2020-2024)",
-                                         labels={'growth_rate': 'Growth Rate (%)', 'career': 'Career Path'})
-                    fig_declining.update_layout(height=400)
-                    st.plotly_chart(fig_declining, use_container_width=True)
+                if not growth_df.empty:
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown("**🚀 Top 10 Growing Careers**")
+                        if not top_growing.empty:
+                            fig_growing = px.bar(top_growing, x='growth_rate', y='career', orientation='h',
+                                               title="Top 10 Growing Career Paths (2020-2024)",
+                                               labels={'growth_rate': 'Growth Rate (%)', 'career': 'Career Path'})
+                            fig_growing.update_layout(height=400)
+                            st.plotly_chart(fig_growing, use_container_width=True)
+                        else:
+                            st.info("No growing careers found with sufficient data.")
+                    
+                    with col2:
+                        st.markdown("**📉 Top 10 Declining Careers**")
+                        if not top_declining.empty:
+                            fig_declining = px.bar(top_declining, x='growth_rate', y='career', orientation='h',
+                                                 title="Top 10 Declining Career Paths (2020-2024)",
+                                                 labels={'growth_rate': 'Growth Rate (%)', 'career': 'Career Path'})
+                            fig_declining.update_layout(height=400)
+                            st.plotly_chart(fig_declining, use_container_width=True)
+                        else:
+                            st.info("No declining careers found with sufficient data.")
+                else:
+                    st.warning("No career growth data available for the selected filters.")
                 
                 # Show detailed growth data
-                st.markdown("**📊 Detailed Growth Analysis**")
-                growth_analysis = pd.concat([
-                    top_growing.assign(type='Growing'),
-                    top_declining.assign(type='Declining')
-                ])
-                st.dataframe(growth_analysis[['career', 'growth_rate', 'start_count', 'end_count', 'type']].round(2), use_container_width=True)
+                if not growth_df.empty:
+                    st.markdown("**📊 Detailed Growth Analysis**")
+                    growth_analysis = pd.concat([
+                        top_growing.assign(type='Growing'),
+                        top_declining.assign(type='Declining')
+                    ])
+                    st.dataframe(growth_analysis[['career', 'growth_rate', 'start_count', 'end_count', 'type']].round(2), use_container_width=True)
+                else:
+                    st.info("No detailed growth data available.")
             
-            # Career path insights for students
+            # Career path insights for students using aggregated data
             st.markdown("**🎯 Career Path Insights for International Students**")
             career_summary = entry_level_careers.groupby('aggressive_normalized_soc_title').agg({
-                'PW_WAGE_LEVEL': 'count',
-                'PREVAILING_WAGE': ['mean', 'median']
+                'petition_count': 'sum',
+                'avg_salary': 'mean',
+                'min_salary': 'min',
+                'max_salary': 'max'
             }).round(2)
-            # Calculate % Level I separately
-            level_i_percentage = entry_level_careers.groupby('aggressive_normalized_soc_title')['PW_WAGE_LEVEL'].apply(lambda x: (x == 'I').sum() / len(x) * 100).round(2)
+            # Calculate % Level I using aggregated data
+            level_i_percentage = entry_level_careers.groupby('aggressive_normalized_soc_title').apply(
+                lambda x: (x['level1_count'].sum() / x['petition_count'].sum() * 100) if x['petition_count'].sum() > 0 else 0
+            ).round(2)
             career_summary['% Level I'] = level_i_percentage
-            career_summary.columns = ['Entry-Level Petitions', 'Avg Salary', 'Median Salary', '% Level I']
+            career_summary.columns = ['Entry-Level Petitions', 'Avg Salary', 'Min Salary', 'Max Salary', '% Level I']
             career_summary = career_summary[career_summary['Entry-Level Petitions'] >= 10].sort_values('Entry-Level Petitions', ascending=False)
             st.dataframe(career_summary.head(20), use_container_width=True)
             
@@ -1080,47 +1318,47 @@ with trends_tab5:
         st.markdown('<div class="info-box">💡 <strong>Key Insight:</strong> Understanding salary expectations helps you negotiate better offers and plan your financial future. Salaries vary significantly by field, location, experience level, and company type.</div>', unsafe_allow_html=True)
     
     if not df.empty:
-        # Focus on entry-level salaries
-        entry_level_salary = df[df['PW_WAGE_LEVEL'].isin(['I', 'II'])]
+        # Use the specific salary insights function for aggregated data
+        salary_insights_df = get_salary_insights_data(company, state, soc_title, year_range, international_students_only)
         
-        if not entry_level_salary.empty:
+        if not salary_insights_df.empty:
             col1, col2 = st.columns(2)
             
             with col1:
                 st.markdown("**Entry-Level Salary Distribution by Field**")
-                # Top 10 fields for entry-level
-                top_fields = entry_level_salary['aggressive_normalized_soc_title'].value_counts().head(10).index.tolist()
-                top_fields_data = entry_level_salary[entry_level_salary['aggressive_normalized_soc_title'].isin(top_fields)]
+                # Top 10 fields for entry-level using aggregated data
+                top_fields = salary_insights_df['aggressive_normalized_soc_title'].value_counts().head(10).index.tolist()
+                top_fields_data = salary_insights_df[salary_insights_df['aggressive_normalized_soc_title'].isin(top_fields)]
                 
-                fig_salary_field = px.box(top_fields_data, x='aggressive_normalized_soc_title', y='PREVAILING_WAGE',
-                                        title="Entry-Level Salary Distribution by Field",
-                                        labels={'PREVAILING_WAGE': 'Salary ($)', 'aggressive_normalized_soc_title': 'Field'})
+                fig_salary_field = px.bar(top_fields_data, x='aggressive_normalized_soc_title', y='avg_salary',
+                                        title="Entry-Level Salary by Field",
+                                        labels={'avg_salary': 'Average Salary ($)', 'aggressive_normalized_soc_title': 'Field'})
                 fig_salary_field.update_layout(height=400, xaxis_tickangle=-45)
                 st.plotly_chart(fig_salary_field, use_container_width=True)
             
             with col2:
                 st.markdown("**Entry-Level Salary Trends by Year**")
-                entry_salary_trends = entry_level_salary.groupby(['YEAR', 'PW_WAGE_LEVEL'])['PREVAILING_WAGE'].mean().reset_index()
+                # Use aggregated data for salary trends
+                salary_trends = salary_insights_df.groupby('aggressive_normalized_soc_title')['avg_salary'].mean().reset_index()
                 
-                fig_salary_trends = px.line(entry_salary_trends, x='YEAR', y='PREVAILING_WAGE', color='PW_WAGE_LEVEL',
-                                          title="Entry-Level Salary Trends (2020-2024)",
-                                          labels={'PREVAILING_WAGE': 'Average Salary ($)', 'YEAR': 'Year', 'PW_WAGE_LEVEL': 'Wage Level'})
+                fig_salary_trends = px.bar(salary_trends.head(10), x='avg_salary', y='aggressive_normalized_soc_title',
+                                          title="Top 10 Paying Fields",
+                                          labels={'avg_salary': 'Average Salary ($)', 'aggressive_normalized_soc_title': 'Field'})
                 fig_salary_trends.update_layout(height=400)
                 st.plotly_chart(fig_salary_trends, use_container_width=True)
             
             # Enhanced Salary by Location with Better Visualization
             st.markdown("**🗺️ Salary by Location**")
-            entry_location_salary = entry_level_salary.groupby('EMPLOYER_STATE')['PREVAILING_WAGE'].agg(['mean', 'count']).reset_index()
-            entry_location_salary = entry_location_salary[entry_location_salary['count'] >= 100]  # Only states with 100+ entry-level petitions
-            top_salary_states = entry_location_salary.nlargest(15, 'mean')
+            # Use top states data for location salary analysis
+            location_salary = top_states_df[top_states_df['petition_count'] >= 100].nlargest(15, 'avg_salary')
             
             # Create a more appealing location salary visualization with better styling
-            fig_location_salary = px.scatter(top_salary_states, x='mean', y='EMPLOYER_STATE',
-                                           size='count', color='mean',
+            fig_location_salary = px.scatter(location_salary, x='avg_salary', y='state',
+                                           size='petition_count', color='avg_salary',
                                            title="Best Paying States (100+ petitions)",
-                                           labels={'mean': 'Average Salary ($)', 'EMPLOYER_STATE': 'State', 'count': 'Number of Petitions'},
+                                           labels={'avg_salary': 'Average Salary ($)', 'state': 'State', 'petition_count': 'Number of Petitions'},
                                            color_continuous_scale='viridis',
-                                           hover_data=['count'])
+                                           hover_data=['petition_count'])
             fig_location_salary.update_layout(
                 height=500, 
                 showlegend=False,
@@ -1137,51 +1375,45 @@ with trends_tab5:
             # Enhanced Salary Statistics
             st.markdown("**📊 Comprehensive Salary Statistics**")
             
-            # Overall statistics
+            # Overall statistics using aggregated data
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                st.metric("Average Salary", f"${entry_level_salary['PREVAILING_WAGE'].mean():,.0f}")
+                st.metric("Average Salary", f"${salary_insights_df['avg_salary'].mean():,.0f}")
             with col2:
-                st.metric("Median Salary", f"${entry_level_salary['PREVAILING_WAGE'].median():,.0f}")
+                st.metric("Median Salary", f"${salary_insights_df['avg_salary'].median():,.0f}")
             with col3:
-                st.metric("25th Percentile", f"${entry_level_salary['PREVAILING_WAGE'].quantile(0.25):,.0f}")
+                st.metric("Min Salary", f"${salary_insights_df['min_salary'].min():,.0f}")
             with col4:
-                st.metric("75th Percentile", f"${entry_level_salary['PREVAILING_WAGE'].quantile(0.75):,.0f}")
+                st.metric("Max Salary", f"${salary_insights_df['max_salary'].max():,.0f}")
             
-            # Salary distribution by wage level
+            # Salary distribution by field
             col1, col2 = st.columns(2)
             with col1:
-                st.markdown("**📈 Salary Distribution by Experience Level**")
-                wage_level_stats = entry_level_salary.groupby('PW_WAGE_LEVEL')['PREVAILING_WAGE'].agg(['mean', 'median', 'count']).round(0)
-                wage_level_stats.columns = ['Average Salary', 'Median Salary', 'Number of Petitions']
-                st.dataframe(wage_level_stats, use_container_width=True)
+                st.markdown("**📈 Top 10 Fields by Average Salary**")
+                top_fields_stats = salary_insights_df.nlargest(10, 'avg_salary')[['aggressive_normalized_soc_title', 'avg_salary', 'petition_count']]
+                top_fields_stats.columns = ['Field', 'Average Salary', 'Petitions']
+                st.dataframe(top_fields_stats, use_container_width=True)
             
             with col2:
-                st.markdown("**📊 Salary Percentiles by Experience Level**")
-                percentiles = entry_level_salary.groupby('PW_WAGE_LEVEL')['PREVAILING_WAGE'].quantile([0.25, 0.5, 0.75, 0.9]).round(0)
-                percentiles_df = percentiles.unstack()
-                percentiles_df.columns = ['25th Percentile', 'Median', '75th Percentile', '90th Percentile']
-                st.dataframe(percentiles_df, use_container_width=True)
+                st.markdown("**📊 Salary Range by Field**")
+                salary_range_stats = salary_insights_df[['aggressive_normalized_soc_title', 'min_salary', 'max_salary', 'avg_salary']].head(10)
+                salary_range_stats.columns = ['Field', 'Min Salary', 'Max Salary', 'Avg Salary']
+                st.dataframe(salary_range_stats, use_container_width=True)
             
             # Enhanced Top Paying Fields with Better Visualization
             st.markdown("**💵 Top Paying Fields (100+ petitions)**")
-            salary_insights = entry_level_salary.groupby('aggressive_normalized_soc_title').agg({
-                'PW_WAGE_LEVEL': 'count',
-                'PREVAILING_WAGE': ['mean', 'median', 'std', 'min', 'max']
-            }).round(0)
-            salary_insights.columns = ['Petitions', 'Avg Salary', 'Median Salary', 'Std Dev', 'Min Salary', 'Max Salary']
-            salary_insights = salary_insights[salary_insights['Petitions'] >= 100].sort_values('Avg Salary', ascending=False)
-            
-            # Create a better visualization for top paying fields
-            top_paying_fields = salary_insights.head(15).reset_index()
+            # Use aggregated data for top paying fields
+            top_paying_fields = salary_insights_df[salary_insights_df['petition_count'] >= 100].nlargest(15, 'avg_salary').reset_index()
+            top_paying_fields = top_paying_fields[['aggressive_normalized_soc_title', 'avg_salary', 'petition_count', 'min_salary', 'max_salary']]
+            top_paying_fields.columns = ['Field', 'Avg Salary', 'Petitions', 'Min Salary', 'Max Salary']
             
             col1, col2 = st.columns(2)
             
             with col1:
                 # Bar chart for top paying fields
-                fig_top_fields = px.bar(top_paying_fields, x='Avg Salary', y='aggressive_normalized_soc_title',
+                fig_top_fields = px.bar(top_paying_fields, x='Avg Salary', y='Field',
                                       title="Top 15 Highest Paying Fields (100+ petitions)",
-                                      labels={'Avg Salary': 'Average Salary ($)', 'aggressive_normalized_soc_title': 'Field'},
+                                      labels={'Avg Salary': 'Average Salary ($)', 'Field': 'Field'},
                                       color='Avg Salary',
                                       color_continuous_scale='viridis')
                 fig_top_fields.update_layout(height=500, yaxis={'categoryorder':'total ascending'})
@@ -1194,13 +1426,13 @@ with trends_tab5:
                                                 title="Salary vs Petition Volume (100+ petitions)",
                                                 labels={'Petitions': 'Number of Petitions', 'Avg Salary': 'Average Salary ($)'},
                                                 color_continuous_scale='plasma',
-                                                hover_data=['aggressive_normalized_soc_title'])
+                                                hover_data=['Field'])
                 fig_salary_vs_volume.update_layout(height=500)
                 st.plotly_chart(fig_salary_vs_volume, use_container_width=True)
             
             # Detailed table
             st.markdown("**📊 Detailed Salary Statistics by Field**")
-            st.dataframe(salary_insights.head(15), use_container_width=True)
+            st.dataframe(top_paying_fields, use_container_width=True)
             
             # Key insights for students
             st.markdown("**🎯 Key Insights for Salary Negotiation:**")
