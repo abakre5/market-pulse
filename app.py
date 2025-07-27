@@ -894,14 +894,6 @@ st.title("US H-1B Lottery Petition Explorer")
 # Sidebar filters
 st.sidebar.header("Filters")
 
-
-
-
-
-# Company filter with priority list for Indian journalists
-st.sidebar.markdown("---")
-st.sidebar.markdown("**🏢 Company Filter**")
-
 # Independent filters (not cascading)
 # Company filter with priority list for Indian journalists
 with st.spinner("Loading companies..."):
