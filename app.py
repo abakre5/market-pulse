@@ -41,7 +41,7 @@ def optimize_memory():
         return False
 
 # Set page config at the very beginning
-st.set_page_config(page_title="H-1B Company-Level Explorer", layout="wide")
+st.set_page_config(page_title="H-1B Explorer", layout="wide")
 
 # Initialize memory optimization
 if 'memory_optimized' not in st.session_state:

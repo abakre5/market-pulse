@@ -333,8 +333,8 @@ def get_comprehensive_ai_ml_data():
 # MAIN PAGE CONTENT
 # ============================================================================
 
-st.title("🤖 AI/ML Engineers vs Software Developers")
-st.markdown("**Comprehensive comparison of AI/ML Engineers and Traditional Software Developers in H-1B lottery petitions (2020-2024)**")
+st.title("🚀 AI/ML vs Software Developers")
+st.markdown("**The Rise of AI/ML Engineers in H-1B Petitions (2020-2024)**")
 
 # Main page tooltip
 st.info("💡 **Comprehensive Analysis**: This page provides detailed insights into the growth, salary trends, and distribution of AI/ML Engineers compared to traditional Software Developers in H-1B petitions.")
